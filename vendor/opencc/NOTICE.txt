@@ -1,0 +1,24 @@
+OpenCC runtime assets
+=====================
+
+This folder contains the OpenCC conversion engine and dictionaries used by
+JianFanConverter at build time. build.ps1 copies these files into dist\; the
+finished app also works with this folder deleted, because dist\ contains the
+same files.
+
+Source project: https://github.com/BYVoid/OpenCC
+License:        Apache License 2.0 (see LICENSE in this folder)
+
+Files:
+  opencc.dll          OpenCC C API native library (Windows x64)
+  s2t.json            Simplified -> Traditional configuration
+  t2s.json            Traditional -> Simplified configuration
+  STPhrases.ocd2      Simplified -> Traditional phrase dictionary
+  STCharacters.ocd2   Simplified -> Traditional character dictionary
+  TSPhrases.ocd2      Traditional -> Simplified phrase dictionary
+  TSCharacters.ocd2   Traditional -> Simplified character dictionary
+
+Provenance: these files were taken from the OpenCC distribution bundled with
+ConvertZZ v1.0.1.1 (zouhuidong/ConvertZZ, 2025-04-25). They are OpenCC
+artifacts and are redistributed here under the Apache License 2.0. No
+ConvertZZ source code (GPL-3.0) is included in this project.
