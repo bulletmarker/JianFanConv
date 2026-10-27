@@ -12,7 +12,7 @@
 | 重新构建 `build.ps1` | `src\Program.cs` + `vendor\opencc\` 内的引擎文件 + 系统自带 `csc.exe` |
 
 - `dist\` 整个目录可以直接拷到任意位置（或另一台 Win10/11 x64 电脑）运行。
-- `vendor\opencc\` 是项目自带的 OpenCC 引擎副本（`opencc.dll` + 词典 + 许可），`build.ps1` 只从这里复制，**不会读取 `D:\software\ConvertZZ_v1.0.1.1\` 或任何外部安装目录**。
+- `vendor\opencc\` 是项目自带的 OpenCC 引擎副本（`opencc.dll` + 词典 + 许可），`build.ps1` 只从这里复制，**不会读取本机的 ConvertZZ 安装目录或任何外部路径**。
 - 本项目不含 ConvertZZ（GPL-3.0）的任何源码，只在最初取用了一次它附带的 OpenCC 运行库，现已完整收进 `vendor\`。
 
 ## 功能
@@ -34,6 +34,8 @@ dist\JianFanConverter.exe
 
 要求：Windows 10/11 **x64**，.NET Framework 4.8 运行时（Win10/11 自带）。`opencc.dll`、`s2t.json`、`t2s.json` 及 4 个 `.ocd2` 词典文件必须与 exe 同目录（`dist\` 内已随构建一并复制）。若缺少这些文件，程序启动时会用中文弹窗指明缺失的文件名。
 
+> 从仓库克隆的代码不包含 `dist\`（构建产物不入库），请先按下一节构建。
+
 首次启动 Windows SmartScreen 可能提示未知发布者（exe 没有代码签名），点「更多信息 → 仍要运行」即可。
 
 ## 构建
@@ -44,7 +46,7 @@ dist\JianFanConverter.exe
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-脚本会：清理并重建 `dist\` → **从项目内的 `vendor\opencc\` 复制 7 个 OpenCC 运行时文件** → 用 System.Drawing 生成应用图标 `dist\app.ico`（失败则跳过，不阻塞构建）→ 调用 `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe` 编译（`/target:winexe /platform:x64 /codepage:65001`）。
+脚本会：清理并重建 `dist\` → **从项目内的 `vendor\opencc\` 复制 7 个 OpenCC 运行时文件** → 用 System.Drawing 生成应用图标 `dist\app.ico`（失败则跳过，不阻塞构建）→ 调用系统自带的 `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe` 编译（`/target:winexe /platform:x64 /codepage:65001`）。
 
 ## 修改指南
 
@@ -65,12 +67,17 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - **窗口默认大小**：`MainForm` 构造函数里的 `ClientSize`
 - 改完运行 `build.ps1` 重新编译即可。
 
+维护者 / AI agent 的开发约定见 [AGENTS.md](AGENTS.md)。
+
 ## 文件结构
 
 ```
-JianFanConverter\
+JianFanConv\
 ├── build.ps1                    构建脚本（从 vendor 复制运行时、生成图标、编译）
-├── README.md
+├── README.md                    本文档
+├── LICENSE                      应用代码 MIT 许可
+├── AGENTS.md                    维护者 / AI agent 约定
+├── .gitignore                   忽略 dist/ 与临时文件
 ├── src\
 │   └── Program.cs               全部源码（WinForms UI + OpenCC P/Invoke）
 ├── vendor\
@@ -81,7 +88,7 @@ JianFanConverter\
 │       ├── TSPhrases.ocd2 / TSCharacters.ocd2
 │       ├── LICENSE              Apache License 2.0
 │       └── NOTICE.txt           来源与授权说明
-└── dist\                        编译产物（可直接分发）
+└── dist\                        编译产物，不入库（可直接分发）
     ├── JianFanConverter.exe     x64 主程序
     ├── app.ico                  构建时生成的图标
     └── （其余 7 个文件从 vendor 复制）
@@ -99,3 +106,8 @@ JianFanConverter\
 - 转换引擎 [OpenCC](https://github.com/BYVoid/OpenCC)（`opencc.dll` 及词典）采用 **Apache License 2.0**，许可原文见 `vendor\opencc\LICENSE`，来源说明见 `NOTICE.txt`。这些文件随本程序一并分发。
 - 本程序的界面与互操作代码为原创实现，**不包含 ConvertZZ 的任何代码**（ConvertZZ 为 GPL-3.0，本项目与其无代码关系）。
 - 仅支持 win-x64。
+
+## 许可证
+
+- 本程序代码：[MIT License](LICENSE)
+- `vendor/opencc/` 内的 OpenCC 引擎与词典：[Apache License 2.0](vendor/opencc/LICENSE)
