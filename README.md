@@ -2,7 +2,7 @@
 
 一个本地离线的简体 ↔ 繁体中文转换小工具。左侧粘贴/输入原文，右侧实时显示转换结果，基于 OpenCC 引擎，全程本地运行，无任何网络请求。
 
-**自带 OpenCC 引擎**：运行和构建都只依赖本目录内的文件，**不依赖 ConvertZZ**，卸载 ConvertZZ 后照常使用、照常重新编译。
+**自带 OpenCC 引擎**：运行和构建都只依赖本目录内的文件，完全离线，可独立分发或迁移。
 
 ## 独立性
 
@@ -12,8 +12,8 @@
 | 重新构建 `build.ps1` | `src\Program.cs` + `vendor\opencc\` 内的引擎文件 + 系统自带 `csc.exe` |
 
 - `dist\` 整个目录可以直接拷到任意位置（或另一台 Win10/11 x64 电脑）运行。
-- `vendor\opencc\` 是项目自带的 OpenCC 引擎副本（`opencc.dll` + 词典 + 许可），`build.ps1` 只从这里复制，**不会读取本机的 ConvertZZ 安装目录或任何外部路径**。
-- 本项目不含 ConvertZZ（GPL-3.0）的任何源码，只在最初取用了一次它附带的 OpenCC 运行库，现已完整收进 `vendor\`。
+- `vendor\opencc\` 是项目自带的 OpenCC 引擎副本（`opencc.dll` + 词典 + 许可），`build.ps1` 只从这里复制，**不读取任何外部安装目录，也不访问网络**。
+- OpenCC 运行时资产的来源与授权见 `vendor\opencc\NOTICE.txt`；项目内不含任何 GPL 代码。
 
 ## 功能
 
@@ -104,7 +104,7 @@ JianFanConv\
 ## 版权与致谢
 
 - 转换引擎 [OpenCC](https://github.com/BYVoid/OpenCC)（`opencc.dll` 及词典）采用 **Apache License 2.0**，许可原文见 `vendor\opencc\LICENSE`，来源说明见 `NOTICE.txt`。这些文件随本程序一并分发。
-- 本程序的界面与互操作代码为原创实现，**不包含 ConvertZZ 的任何代码**（ConvertZZ 为 GPL-3.0，本项目与其无代码关系）。
+- 本程序的界面与互操作代码为原创实现，项目中不含任何 GPL 代码；OpenCC 资产按 Apache-2.0 分发。
 - 仅支持 win-x64。
 
 ## 许可证

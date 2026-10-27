@@ -5,7 +5,7 @@
 
 ## OVERVIEW
 
-Windows 本地简繁转换桌面工具。C# 5 + WinForms（.NET Framework 4.8 / x64），自带 OpenCC 引擎，左栏输入、右栏实时输出，完全离线，不依赖 ConvertZZ 或其他本地项目。
+Windows 本地简繁转换桌面工具。C# 5 + WinForms（.NET Framework 4.8 / x64），自带 OpenCC 引擎，左栏输入、右栏实时输出，完全离线，不依赖任何外部安装或本地项目。
 
 本仓库为独立仓库，默认分支 `master`；远程地址以 `git remote -v` 为准。
 
@@ -86,14 +86,14 @@ dist\JianFanConverter.exe
 - **Source encoding**：`.cs` 为 UTF-8，中文界面字符串直接写；编译参数含 `/codepage:65001`。
 - **build.ps1 保持 ASCII**：图标里的「简」用 `[char]0x7B80` 生成；不要加入中文字面量（PowerShell 5.1 无 BOM 会乱码）。
 - **原生互操作**：`opencc_open_w` 传绝对宽字符路径；启动时 `SetDllDirectory(exeDir)`；每个方向缓存一个实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
-- **UI 文案中文**：沿用 OpenCC / ConvertZZ 的术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
+- **UI 文案中文**：沿用 OpenCC 术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
 - **素材流向单一**：`vendor/opencc/` → `dist/`；`dist/` 是生成物。
 - **提交范围**：只提交 `src/`、`vendor/`、`build.ps1`、`README.md`、`AGENTS.md`、`LICENSE`；不要提交 `dist/`。
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
-- 禁止在 `build.ps1` 或源码中出现本机绝对路径或外部安装目录（如 ConvertZZ 的安装路径）；构建只能读 `vendor/`。
-- 禁止复制 ConvertZZ 源码（GPL-3.0）；OpenCC 资产为 Apache-2.0，`vendor/opencc/LICENSE` 与 `NOTICE.txt` 必须保留。
+- 禁止在 `build.ps1` 或源码中出现本机绝对路径或外部安装目录；构建只能读 `vendor/`。
+- 禁止引入 GPL 代码；本仓库只允许 MIT 应用代码 + Apache-2.0 的 OpenCC 资产，`vendor/opencc/LICENSE` 与 `NOTICE.txt` 必须保留。
 - 禁止手改 `dist/`（每次构建会清空）；禁止把源码或构建产物提交进仓库。
 - 禁止删除 `opencc_convert_utf8_free` / `opencc_close`；禁止无锁调用转换。
 - 禁止为“顺手”引入 SDK、NuGet、网络请求、安装包或第二个源码文件。
