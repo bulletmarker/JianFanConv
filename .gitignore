@@ -6,3 +6,10 @@ obj/
 *.log
 Thumbs.db
 .DS_Store
+
+# local agent / editor state (never part of the project)
+.omo/
+
+# transient release artifacts (built by build.ps1, attached to the Gitee release)
+JianFanConverter-v*.zip
+release-notes-v*.md
