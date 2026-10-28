@@ -148,32 +148,41 @@ if ($SkipGitee) {
     if (-not $originInfo) { Fail 'cannot parse owner/repo from origin remote' }
     $api = 'https://gitee.com/api/v5/repos/' + $originInfo.Owner + '/' + $originInfo.Repo
 
-    $release = $null
-    try {
-        $release = Invoke-RestMethod -Uri ($api + '/releases/tags/' + $tag) -TimeoutSec 30
-        Write-Host ('release exists: id=' + $release.id)
-    } catch {
-        Write-Host 'release does not exist yet, creating it'
-    }
+    $tagCommit = (& git rev-list -n 1 $tag 2>$null)
+    if (-not $tagCommit) { $tagCommit = $head }
+    $tagCommit = $tagCommit.Trim()
 
-    if (-not $release) {
-        $payload = @{
-            access_token     = $token
-            tag_name         = $tag
-            name             = $title
-            body             = $notes
-            target_commitish = $head
-            prerelease       = $false
-        } | ConvertTo-Json
-        # PS 5.1 encodes string bodies as ASCII; send UTF-8 bytes so Chinese survives.
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
-        $release = Invoke-RestMethod -Method Post -Uri ($api + '/releases') `
-            -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec 60
+    # Gitee answers HTTP 200 with a body of "null" for a tag that has no release
+    # yet, so existence must be judged by the id, not by the HTTP status.
+    $release = Invoke-RestMethod -Uri ($api + '/releases/tags/' + $tag) -TimeoutSec 30
+    if ($release -and $release.id) {
+        Write-Host ('release exists: id=' + $release.id)
+    } else {
+        # The create endpoint only accepts form data; a JSON body answers 405.
+        # curl.exe is used because PowerShell 5.1 mangles UTF-8 in form bodies.
+        $titleFile = Join-Path ([System.IO.Path]::GetTempPath()) ('jfconv-title-' + $Version + '.txt')
+        [System.IO.File]::WriteAllText($titleFile, $title, (New-Object System.Text.UTF8Encoding($false)))
+        try {
+            $raw = & curl.exe -s -X POST `
+                --data-urlencode ('access_token=' + $token) `
+                --data-urlencode ('tag_name=' + $tag) `
+                --data-urlencode ('name@' + $titleFile) `
+                --data-urlencode ('body@' + $notesPath) `
+                --data-urlencode ('target_commitish=' + $tagCommit) `
+                --data-urlencode 'prerelease=false' `
+                ($api + '/releases')
+            if ($LASTEXITCODE -ne 0) { Fail "curl failed to create the release (exit $LASTEXITCODE)" }
+        } finally {
+            if (Test-Path -LiteralPath $titleFile) { Remove-Item -LiteralPath $titleFile -Force }
+        }
+        $release = ($raw -join "`n") | ConvertFrom-Json
+        if (-not $release.id) { Fail ('release creation failed: ' + ($raw -join ' ')) }
         Write-Host ('created: id=' + $release.id)
     }
 
+    $attached = @(Invoke-RestMethod -Uri ($api + '/releases/' + $release.id + '/attach_files?access_token=' + $token) -TimeoutSec 30)
     $alreadyAttached = $false
-    foreach ($asset in $release.assets) {
+    foreach ($asset in $attached) {
         if ($asset.name -eq $zipName) { $alreadyAttached = $true }
     }
     if ($alreadyAttached) {
