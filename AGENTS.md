@@ -30,6 +30,7 @@ JianFanConv/
 ├── src/Program.cs            唯一源码（约 1150 行）
 ├── vendor/opencc/            内置 OpenCC 引擎+词库+许可（构建期素材；编译时嵌入 exe）
 ├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）
+├── release.ps1               一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
 ├── dist/                     构建产物（已 gitignore；只有 JianFanConverter.exe）
 ├── .gitignore                忽略 dist/、运行时缓存与发布临时文件
 ├── LICENSE                   应用代码 MIT 许可
@@ -141,24 +142,20 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 ## 发布流程
 
 ```powershell
-# 1. 构建 + 自检（见 COMMANDS）
-powershell -ExecutionPolicy Bypass -File build.ps1
-
-# 2. 打包（注意用 dist\* ，不要用 dist，否则解压多一层目录）
-$v = '1.0.1'
-Compress-Archive -Path dist\* -DestinationPath "JianFanConverter-v$v-win-x64.zip" -Force
-Get-FileHash "JianFanConverter-v$v-win-x64.zip" -Algorithm SHA256
-
-# 3. 打 tag 并推 Gitee（GitHub 由 Actions 自动镜像）
-git tag -a "v$v" -m "JianFanConverter v$v"
-git push origin master --tags
+# 一条命令发版：构建 → 打包 → 打 tag → 推 Gitee → 建 Gitee 发行版并传附件 → 触发镜像 → 建 GitHub release
+# 前置：先写好 release-notes-v<版本>.md（首个 "## " 行会作为发行版标题）
+powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.2
 ```
 
-- `git push origin` 只推 Gitee（唯一真源）。GitHub 通常在十几分钟内自动同步；想立刻同步用 `gh workflow run sync-from-gitee.yml`。
+- `release.ps1` 的 `GITEE_TOKEN`（Gitee 私人令牌，需 `projects` 权限）从环境变量读取，顺序为进程 → User → Machine；**不要写进任何文件或提交**。
+- 只重跑某一环时用开关：`-SkipBuild` / `-SkipZip` / `-SkipGitPush` / `-SkipGitee` / `-SkipGitHub`。脚本对已存在的 tag、发行版、同名附件都是幂等的，可以安全重跑。
+- 脚本是 **ASCII-only**（同 `build.ps1` 的理由）；发行版标题从说明文件的标题行派生，不要在脚本里写中文字面量。
+- 手动兜底流程：`build.ps1` → `Compress-Archive -Path dist\*`（注意 `dist\*`，不要用 `dist`，否则解压多一层目录）→ `git tag -a` → `git push origin master --tags` → Gitee 网页建 release 上传 zip。
+- `git push origin` 只推 Gitee（唯一真源）。GitHub 通常十几分钟内自动同步；想立刻同步用 `gh workflow run sync-from-gitee.yml`。
 - 需要应急直推 GitHub 时用 `git push github master --tags`（`github` remote 仍保留）。
-- Gitee 在网页「发行版」新建 release 并上传 zip；GitHub 可用 `gh release create`。
+- GitHub 的 release 由脚本调 `gh release create` 创建。`--mirror` 只同步 git 引用，**附件不会跨平台**。
 - 发行版说明里写清 SHA256、环境要求（Win10/11 x64、.NET Framework 4.8）、SmartScreen 提示与许可声明。
-- zip 与说明文件都是发布临时物，上传后删除，不入库。
+- zip 与说明文件都是发布临时物（已在 `.gitignore`），上传后删除。
 
 ## NOTES
 
