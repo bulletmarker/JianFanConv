@@ -1,13 +1,15 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-10-27
+**Generated:** 2026-10-28
 **Branch:** master
 
 ## OVERVIEW
 
-Windows 本地简繁转换桌面工具。C# 5 + WinForms（.NET Framework 4.8 / x64），自带 OpenCC 引擎，左栏输入、右栏实时输出，完全离线，不依赖任何外部安装或本地项目。
+Windows 本地简繁转换桌面工具。C# 5 + WinForms（.NET Framework 4.8 / x64），左栏输入、右栏实时输出，完全离线，不依赖任何外部安装或本地项目。
 
-本仓库为独立仓库，默认分支 `master`；远程地址以 `git remote -v` 为准。
+OpenCC 引擎与词典在**编译期内嵌进 exe**，`dist\` 只有一个可执行文件；首次运行把它释放到用户缓存目录再加载，因此分发不需要任何附带文件。
+
+本仓库以 **Gitee 为唯一真源**：`origin` 只推 Gitee；GitHub 由 `.github/workflows/sync-from-gitee.yml` 定时从 Gitee 镜像（国内网络直推 GitHub 不稳定，故本地不再推 GitHub）。远程地址以 `git remote -v` 为准。
 
 ## SENSITIVE DATA POLICY
 
@@ -24,11 +26,12 @@ Windows 本地简繁转换桌面工具。C# 5 + WinForms（.NET Framework 4.8 / 
 
 ```
 JianFanConv/
-├── src/Program.cs            唯一源码（989 行）
-├── vendor/opencc/            内置 OpenCC 引擎+词库+许可（构建素材；升级需同步许可）
-├── build.ps1                 一键构建（清空 dist → 复制 vendor → 编译）
-├── dist/                     构建产物（已 gitignore；clone 后需先构建）
-├── .gitignore                忽略 dist/ 及临时文件
+├── .github/workflows/        定时把 Gitee 镜像到 GitHub 的工作流
+├── src/Program.cs            唯一源码（约 1150 行）
+├── vendor/opencc/            内置 OpenCC 引擎+词库+许可（构建期素材；编译时嵌入 exe）
+├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）
+├── dist/                     构建产物（已 gitignore；只有 JianFanConverter.exe）
+├── .gitignore                忽略 dist/、运行时缓存与发布临时文件
 ├── LICENSE                   应用代码 MIT 许可
 ├── AGENTS.md                 维护者 / agent 约定（本文件）
 └── README.md                 面向使用者的运行 / 构建 / 修改说明
@@ -40,26 +43,31 @@ JianFanConv/
 |---|---|---|
 | 改界面 / 布局 / 交互 | `src/Program.cs` 的 `MainForm` / `BuildUi` | 手写 WinForms，无 designer |
 | 改颜色 / 字体 | `Theme` | 唯一配色与字体来源 |
+| 改内嵌运行时的释放 / 缓存 | `RuntimeAssets` | 资源名、缓存目录、`RuntimeTag` |
 | 改转换逻辑 / 引擎 | `OpenCC` / `OpenCCEngine` | P/Invoke 包装 + 实例缓存 |
 | 改方向切换 | `OnDirectionChanged` | `_s2t` 布尔控制方向 |
 | 改实时转换 | `StartConversion` | 200 ms 防抖 + 后台线程 + 版本号 |
 | 改滚动条 | `AutoScrollTextBox` | 不满一屏隐藏，超出显示 |
-| 改构建 / 打包 | `build.ps1` | 只从 `vendor/` 取素材 |
-| 升级 OpenCC | `vendor/opencc/` | 必须同步更新 LICENSE / NOTICE.txt |
+| 改构建 / 打包 | `build.ps1` | 只从 `vendor/` 取素材并以 `/resource` 内嵌 |
+| 升级 OpenCC | `vendor/opencc/` | 必须同步 LICENSE / NOTICE.txt，并 bump `RuntimeTag` |
+| 发版 | 本文「发布流程」 | 构建 → 压缩 → 打 tag → 推 Gitee（GitHub 自动镜像） |
 
 ## CODE MAP
 
 | Symbol | Type | Location | Role |
 |---|---|---|---|
-| `Program.Main` | method | Program.cs:22 | DPI、异常处理、启动文件检查、`Application.Run` |
-| `OpenCC` | class | Program.cs:92 | `opencc.dll` P/Invoke 包装，单实例 |
-| `OpenCCEngine` | static class | Program.cs:195 | s2t/t2s 懒加载缓存 + 全局锁 |
-| `Theme` | static class | Program.cs:250 | 颜色/字体常量 + 圆角路径 |
-| `SegmentedControl` | control | Program.cs:333 | `简 → 繁` / `繁 → 简` 分段开关 |
-| `FlatButton` / `LinkButton` | control | Program.cs:463 / :500 | 自绘按钮 |
-| `AutoScrollTextBox` | control | Program.cs:542 | 自适应滚动条 |
-| `MainForm` | class | Program.cs:601 | 窗口、布局、事件 |
-| `StartConversion` | method | Program.cs:906 | 防抖后转换并回写 UI |
+| `Program.Main` | method | Program.cs:24 | DPI、异常处理、释放运行时、`Application.Run` |
+| `RuntimeAssets` | static class | Program.cs:114 | 内嵌资源提取到缓存目录 + 完整性校验 |
+| `OpenCC` | class | Program.cs:254 | `opencc.dll` P/Invoke 包装，单实例 |
+| `OpenCCEngine` | static class | Program.cs:357 | 运行时目录 + s2t/t2s 懒加载缓存 + 全局锁 |
+| `Theme` | static class | Program.cs:407 | 颜色/字体常量 + 圆角路径 |
+| `HeaderPanel` / `RoundedCard` | control | Program.cs:449 / :466 | 头部与卡片容器 |
+| `SegmentedControl` | control | Program.cs:490 | `简 → 繁` / `繁 → 简` 分段开关 |
+| `FlatButton` / `LinkButton` | control | Program.cs:620 / :657 | 自绘按钮 |
+| `AutoScrollTextBox` | control | Program.cs:699 | 自适应滚动条 |
+| `MainForm` | class | Program.cs:758 | 窗口、布局、事件 |
+| `BuildUi` | method | Program.cs:794 | 全部控件构造与布局 |
+| `OnDirectionChanged` / `StartConversion` | method | Program.cs:1055 / :1063 | 方向切换 / 防抖后转换并回写 UI |
 
 行号会随改动漂移；优先按符号名 grep，不要死信行号。
 
@@ -69,8 +77,11 @@ JianFanConv/
 # 构建（仓库根目录；无 SDK / 无 NuGet）
 powershell -ExecutionPolicy Bypass -File build.ps1
 
-# 运行（构建后生成）
+# 运行（构建后生成；dist 内只有这一个文件）
 dist\JianFanConverter.exe
+
+# 冷启动复现（清掉运行时缓存，验证首次释放）
+Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
 `dist/` 不入库，新克隆的仓库没有 exe，必须先构建。无测试框架、无 CI。改完必须做的最小自检：
@@ -78,6 +89,7 @@ dist\JianFanConverter.exe
 1. 简→繁：`汉字转换测试，软件和硬件。` → `漢字轉換測試，軟件和硬件。`
 2. 繁→简：`漢字轉換測試，軟體和硬體。` → `汉字转换测试，软体和硬体。`
 3. `复制` 后剪贴板 = 右栏内容；`清空` 后两栏为空。
+4. 单文件分发：把 `dist\JianFanConverter.exe` **单独**拷到空目录运行，确认能转换（不是只在仓库里能跑）。
 
 ## CONVENTIONS (deviations only)
 
@@ -85,14 +97,18 @@ dist\JianFanConverter.exe
 - **No project files**：无 `.csproj` / `.sln` / designer / NuGet；源码单文件，UI 全手写。不要引入 WPF / Electron / HTML。
 - **Source encoding**：`.cs` 为 UTF-8，中文界面字符串直接写；编译参数含 `/codepage:65001`。
 - **build.ps1 保持 ASCII**：图标里的「简」用 `[char]0x7B80` 生成；不要加入中文字面量（PowerShell 5.1 无 BOM 会乱码）。
-- **原生互操作**：`opencc_open_w` 传绝对宽字符路径；启动时 `SetDllDirectory(exeDir)`；每个方向缓存一个实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
+- **原生互操作**：`opencc_open_w` 传绝对宽字符路径；`SetDllDirectory(<释放目录>)` 必须在**任何** `opencc` DllImport 之前执行；每个方向缓存一个实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
+- **素材流向单一**：`vendor/opencc/` → 编译期 `/resource:...,JianFanConverter.Runtime.<文件名>` → 运行时释放到缓存；`dist/` 只有 exe，是生成物。
 - **UI 文案中文**：沿用 OpenCC 术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
-- **素材流向单一**：`vendor/opencc/` → `dist/`；`dist/` 是生成物。
-- **提交范围**：只提交 `src/`、`vendor/`、`build.ps1`、`README.md`、`AGENTS.md`、`LICENSE`；不要提交 `dist/`。
+- **提交范围**：只提交 `src/`、`vendor/`、`.github/`、`build.ps1`、`README.md`、`AGENTS.md`、`LICENSE`；`dist/`、`*.zip`、`release-notes-*.md` 都不入库（已在 `.gitignore`）。
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
 - 禁止在 `build.ps1` 或源码中出现本机绝对路径或外部安装目录；构建只能读 `vendor/`。
+- 禁止把运行时资产改回“与 exe 同目录”的分发方式；那会退回到多文件分发，破坏单文件 exe 的唯一价值。
+- 禁止在 `SetDllDirectory` 之前触发任何 `opencc` DllImport（DllImport 一旦发生，DLL 搜索路径就锁定，之后改目录无效）。
+- 禁止改了 `vendor/opencc/` 内容却不 bump `RuntimeAssets.RuntimeTag`（缓存目录名不变会继续命中旧文件）。
+- 禁止删除/清理其它 `runtime-*` 缓存目录（可能正被另一个运行中的实例加载）。
 - 禁止引入 GPL 代码；本仓库只允许 MIT 应用代码 + Apache-2.0 的 OpenCC 资产，`vendor/opencc/LICENSE` 与 `NOTICE.txt` 必须保留。
 - 禁止手改 `dist/`（每次构建会清空）；禁止把源码或构建产物提交进仓库。
 - 禁止删除 `opencc_convert_utf8_free` / `opencc_close`；禁止无锁调用转换。
@@ -103,17 +119,48 @@ dist\JianFanConverter.exe
 
 - 构建环境默认**没有 .NET SDK**（`dotnet --list-sdks` 为空），只有 .NET Framework 4.8 运行时 + 自带 csc；只能用 `build.ps1`。
 - 仅 Win10/11 **x64**；`opencc.dll` 是 x64。
+- 首次运行把 7 个运行时文件释放到 `%LOCALAPPDATA%\JianFanConv\runtime-<tag>\`（该目录不可写时退到 `%TEMP%\JianFanConv\runtime-<tag>\`）。验证冷启动前必须先删掉它，否则测的是热启动。
+- 已存在且长度与内嵌资源一致的文件不会重写；长度不符会重新释放。旧 tag 目录不清理。
 - OpenCC 标准 t2s 会把 `軟體` 转成 `软体`（不是 `软件`）；不要用“更自然”的期望值改自检。
-- UI 自动化：自绘控件只暴露 `AccessibleName`（方向切换 / 粘贴 / 复制 / 清空），没有 ValuePattern / Invoke；用 `WM_LBUTTONDOWN/UP` 发给其 HWND。文本框用 `WM_GETTEXT` 读；`WM_SETTEXT` 不触发 `TextChanged`。
+- UI 自动化（实测有效）：`WM_SETTEXT` 能设文本且可 `WM_GETTEXT` 回读校验，但**不触发 `TextChanged`**；要触发转换就向文本为 `方向切换` 的 HWND 发 `WM_KEYDOWN`（`VK_RIGHT`=0x27 / `VK_LEFT`=0x25），走 `OnDirectionChanged → StartConversion`。
+- UI 自动化（坐标陷阱）：`WM_LBUTTONDOWN/UP` 的 lParam 必须是 **client 相对坐标**；`GetWindowRect` 给的是屏幕坐标，直接当 client 坐标用会越界，`SegmentedControl.HitSegment` 返回 -1，点击静默失效。
+- 控件枚举：`EnumChildWindows` 本身就会递归枚举全部后代；再手动递归会重复计数（表现为 EDIT 控件数量翻倍）。按 HWND 去重。
 - 截图需 DPI 感知 + `DWMWA_EXTENDED_FRAME_BOUNDS`，否则边缘会带入其它窗口内容。
 - 布局按物理像素写死、字体按 DPI 放大；高缩放下比例会变，改布局时在 100% / 125% 都看一眼。
 - `AutoScrollTextBox`：文本 > 20000 字符时不再测量、直接显示滚动条（性能保护）。
 - exe 未签名，首次运行可能触发 SmartScreen。
 - 新克隆仓库没有 `dist/`（被 `.gitignore` 排除），先构建再运行/验证。
+- Gitee 与 GitHub 都走 SSH。本机 `~/.ssh/config` 有 `Host github.com` 块，指向专用密钥 `id_ed25519_github`（带 `IdentitiesOnly yes`）；Gitee 用默认的 `id_ed25519`。两把钥匙互不影响，这些**都是本机配置、不入库**，换机器要重新生成并在各自账户注册。
+- 若本机 SSH 到 GitHub 不通，可改用 `ssh.github.com:443`（在 `Host github.com` 块里加 `HostName ssh.github.com` + `Port 443`）；这比配 HTTPS 代理稳定，`gh` 的 API 调用不受影响。
+- GitHub 侧内容由工作流从 Gitee `--mirror` 强推而来：Gitee 上删掉的分支/标签，GitHub 上也会被删；不要在 GitHub 侧直接提交或开分支，会被下一次同步覆盖。
+- 工作流生效有前提：`.github/workflows/sync-from-gitee.yml` 必须已在 GitHub 的默认分支上，否则它没机会运行。首次落地要同时推 Gitee 和 GitHub 各一次，之后才是 Gitee 单推。
+- GitHub Actions 的 `schedule` 在免费额度下经常延迟十几分钟甚至更久，不能当作「秒级同步」用；需要立刻同步就 `gh workflow run sync-from-gitee.yml`。
 - 默认分支 `master`；远程配置以 `git remote -v` 为准。
+
+## 发布流程
+
+```powershell
+# 1. 构建 + 自检（见 COMMANDS）
+powershell -ExecutionPolicy Bypass -File build.ps1
+
+# 2. 打包（注意用 dist\* ，不要用 dist，否则解压多一层目录）
+$v = '1.0.1'
+Compress-Archive -Path dist\* -DestinationPath "JianFanConverter-v$v-win-x64.zip" -Force
+Get-FileHash "JianFanConverter-v$v-win-x64.zip" -Algorithm SHA256
+
+# 3. 打 tag 并推 Gitee（GitHub 由 Actions 自动镜像）
+git tag -a "v$v" -m "JianFanConverter v$v"
+git push origin master --tags
+```
+
+- `git push origin` 只推 Gitee（唯一真源）。GitHub 通常在十几分钟内自动同步；想立刻同步用 `gh workflow run sync-from-gitee.yml`。
+- 需要应急直推 GitHub 时用 `git push github master --tags`（`github` remote 仍保留）。
+- Gitee 在网页「发行版」新建 release 并上传 zip；GitHub 可用 `gh release create`。
+- 发行版说明里写清 SHA256、环境要求（Win10/11 x64、.NET Framework 4.8）、SmartScreen 提示与许可声明。
+- zip 与说明文件都是发布临时物，上传后删除，不入库。
 
 ## NOTES
 
-- 应用不读取/保存用户配置，每次启动即用。
-- 授权：应用代码采用 MIT（根目录 `LICENSE`）；OpenCC 引擎与词典为 Apache-2.0（见 `vendor/opencc/LICENSE`）。
+- 应用不读取/保存用户配置；唯一的落盘是 `%LOCALAPPDATA%\JianFanConv\runtime-<tag>\` 运行时缓存，可以随时删除，下次启动自动重建。
+- 授权：应用代码采用 MIT（根目录 `LICENSE`）；OpenCC 引擎与词典为 Apache-2.0（见 `vendor/opencc/LICENSE`），随程序内嵌分发。
 - `README.md` 面向使用者；本文件面向改代码的 agent / 维护者。

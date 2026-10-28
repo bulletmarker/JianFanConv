@@ -5,7 +5,9 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,19 +29,38 @@ namespace JianFanConverter
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // Make sure opencc.dll resolves next to the exe, not in the CWD.
-            NativeMethods.SetDllDirectory(AppDomain.CurrentDomain.BaseDirectory);
-
-            string missing = OpenCCEngine.FindMissingFile();
-            if (missing != null)
+            // The OpenCC runtime is embedded in the exe; extract it to a per-user
+            // cache directory so the app no longer needs files next to the exe.
+            string runtimeDir;
+            try
+            {
+                runtimeDir = RuntimeAssets.Ensure();
+            }
+            catch (Exception ex)
             {
                 MessageBox.Show(
-                    "缺少运行时文件：" + missing + Environment.NewLine + Environment.NewLine +
-                    "请确保 opencc.dll、s2t.json、t2s.json 以及 ST/TS 相关 .ocd2 词典文件与本程序（JianFanConverter.exe）位于同一目录。",
+                    "无法将内置的 OpenCC 运行时文件释放到磁盘：" + Environment.NewLine + Environment.NewLine +
+                    ex.Message + Environment.NewLine + Environment.NewLine +
+                    "请确认 %LOCALAPPDATA%\\JianFanConv 或 %TEMP%\\JianFanConv 目录可写后重试。",
                     "简繁转换", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
+            // Must run before the first opencc DllImport call so the loader
+            // resolves opencc.dll from the extracted cache directory.
+            NativeMethods.SetDllDirectory(runtimeDir);
+
+            string missing = RuntimeAssets.FindMissingFile(runtimeDir);
+            if (missing != null)
+            {
+                MessageBox.Show(
+                    "内置运行时文件无法使用：" + missing + Environment.NewLine + Environment.NewLine +
+                    "请删除缓存目录后重新启动本程序：" + Environment.NewLine + runtimeDir,
+                    "简繁转换", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            OpenCCEngine.SetRuntimeDirectory(runtimeDir);
             Application.Run(new MainForm());
         }
 
@@ -83,6 +104,147 @@ namespace JianFanConverter
     {
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern bool SetDllDirectory(string lpPathName);
+    }
+
+    // ------------------------------------------------------------------
+    // OpenCC runtime assets are embedded as managed resources; this class
+    // extracts them into a per-user cache directory at startup so the exe
+    // is the only file that has to be distributed.
+    // ------------------------------------------------------------------
+    internal static class RuntimeAssets
+    {
+        // Bump this when the contents of vendor/opencc change: it is part of the
+        // cache directory name, so old extractions stay untouched and unused.
+        public const string RuntimeTag = "r1";
+
+        private const string ResourcePrefix = "JianFanConverter.Runtime.";
+
+        private static readonly string[] FileNames = new string[]
+        {
+            "opencc.dll", "s2t.json", "t2s.json",
+            "STPhrases.ocd2", "STCharacters.ocd2", "TSPhrases.ocd2", "TSCharacters.ocd2"
+        };
+
+        public static string Ensure()
+        {
+            try
+            {
+                return ExtractTo(PrimaryDirectory());
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return ExtractTo(FallbackDirectory());
+            }
+            catch (IOException)
+            {
+                return ExtractTo(FallbackDirectory());
+            }
+            catch (SecurityException)
+            {
+                return ExtractTo(FallbackDirectory());
+            }
+        }
+
+        public static string FindMissingFile(string dir)
+        {
+            foreach (string f in FileNames)
+            {
+                if (!File.Exists(Path.Combine(dir, f)))
+                    return f;
+            }
+            return null;
+        }
+
+        private static string PrimaryDirectory()
+        {
+            return Path.Combine(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JianFanConv"),
+                "runtime-" + RuntimeTag);
+        }
+
+        private static string FallbackDirectory()
+        {
+            return Path.Combine(
+                Path.Combine(Path.GetTempPath(), "JianFanConv"),
+                "runtime-" + RuntimeTag);
+        }
+
+        private static string ExtractTo(string dir)
+        {
+            Directory.CreateDirectory(dir);
+            Assembly asm = Assembly.GetExecutingAssembly();
+            foreach (string f in FileNames)
+            {
+                string resourceName = ResourcePrefix + f;
+                string target = Path.Combine(dir, f);
+                using (Stream s = asm.GetManifestResourceStream(resourceName))
+                {
+                    if (s == null)
+                        throw new InvalidOperationException("缺少内嵌资源：" + resourceName);
+                    long length = s.Length;
+                    FileInfo existing = new FileInfo(target);
+                    if (existing.Exists && existing.Length == length)
+                        continue;
+                    WriteAsset(s, target, length);
+                }
+            }
+            return dir;
+        }
+
+        private static void WriteAsset(Stream source, string target, long length)
+        {
+            string tmp = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (FileStream fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    source.CopyTo(fs);
+                }
+                try
+                {
+                    File.Move(tmp, target);
+                }
+                catch (IOException)
+                {
+                    // File.Move never overwrites, so the final name already exists:
+                    // either a concurrent instance just produced it (keep it) or a
+                    // stale file with a different length has to be replaced.
+                    FileInfo existing = new FileInfo(target);
+                    if (existing.Exists && existing.Length == length)
+                        return;
+                    try
+                    {
+                        File.Copy(tmp, target, true);
+                    }
+                    catch (IOException)
+                    {
+                        if (!new FileInfo(target).Exists) throw;
+                        // Locked by a running instance; the length check on the
+                        // next start retries the extraction.
+                    }
+                }
+            }
+            finally
+            {
+                DeleteTemp(tmp);
+            }
+        }
+
+        private static void DeleteTemp(string path)
+        {
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (IOException)
+            {
+                // A leftover .tmp file is harmless; the next run re-extracts over it.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Cleanup must never fail the startup.
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -194,24 +356,17 @@ namespace JianFanConverter
 
     internal static class OpenCCEngine
     {
-        private static readonly string[] RequiredFiles = new string[]
-        {
-            "opencc.dll", "s2t.json", "t2s.json",
-            "STPhrases.ocd2", "STCharacters.ocd2", "TSPhrases.ocd2", "TSCharacters.ocd2"
-        };
-
         private static readonly object _gate = new object();
+        private static string _runtimeDir;
         private static OpenCC _s2t;
         private static OpenCC _t2s;
 
-        public static string FindMissingFile()
+        public static void SetRuntimeDirectory(string dir)
         {
-            foreach (string f in RequiredFiles)
+            lock (_gate)
             {
-                if (!File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, f)))
-                    return f;
+                _runtimeDir = dir;
             }
-            return null;
         }
 
         public static string Convert(string text, bool s2t)
@@ -219,16 +374,18 @@ namespace JianFanConverter
             if (string.IsNullOrEmpty(text)) return string.Empty;
             lock (_gate)
             {
+                if (_runtimeDir == null)
+                    throw new InvalidOperationException("OpenCC 运行时目录尚未初始化");
                 if (s2t)
                 {
                     if (_s2t == null)
-                        _s2t = OpenCC.Open(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "s2t.json"));
+                        _s2t = OpenCC.Open(Path.Combine(_runtimeDir, "s2t.json"));
                     return _s2t.Convert(text);
                 }
                 else
                 {
                     if (_t2s == null)
-                        _t2s = OpenCC.Open(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "t2s.json"));
+                        _t2s = OpenCC.Open(Path.Combine(_runtimeDir, "t2s.json"));
                     return _t2s.Convert(text);
                 }
             }

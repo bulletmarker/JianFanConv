@@ -17,15 +17,17 @@ if (-not (Test-Path -LiteralPath $vendor)) { throw "vendored OpenCC assets not f
 if (Test-Path -LiteralPath $dist) { Remove-Item -LiteralPath $dist -Recurse -Force }
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 
-# 2. copy OpenCC runtime files from the project's own vendor folder
+# 2. collect the OpenCC runtime assets from the project's own vendor folder;
+#    they are embedded into the exe as resources (no copy into dist)
 #    (self-contained: no external install such as ConvertZZ is required)
 $runtime = @('opencc.dll','s2t.json','t2s.json','STPhrases.ocd2','STCharacters.ocd2','TSPhrases.ocd2','TSCharacters.ocd2')
+$resources = @()
 foreach ($f in $runtime) {
     $from = Join-Path $vendor $f
     if (-not (Test-Path -LiteralPath $from)) { throw "missing vendored runtime file: $from" }
-    Copy-Item -LiteralPath $from -Destination (Join-Path $dist $f) -Force
+    $resources += ('/resource:"' + $from + '",JianFanConverter.Runtime.' + $f)
 }
-Write-Host ('copied ' + $runtime.Count + ' OpenCC runtime files into dist\')
+Write-Host ('embedding ' + $runtime.Count + ' OpenCC runtime assets as resources')
 
 # 3. generate app icon (blue rounded square with white Jian) - optional
 $ico = Join-Path $dist 'app.ico'
@@ -82,14 +84,28 @@ $cscArgs = @(
     '/reference:System.Windows.Forms.dll'
 )
 if ($iconOk) { $cscArgs += ('/win32icon:"' + $ico + '"') }
+$cscArgs += $resources
 $cscArgs += ('"' + $src + '"')
 
 Write-Host 'compiling...'
 & $csc $cscArgs
-if ($LASTEXITCODE -ne 0) { throw "compile failed with exit code $LASTEXITCODE" }
+$exitCode = $LASTEXITCODE
+
+# app.ico is only a build input for /win32icon; keep dist down to the single exe
+if (Test-Path -LiteralPath $ico) { Remove-Item -LiteralPath $ico -Force }
+
+if ($exitCode -ne 0) { throw "compile failed with exit code $exitCode" }
 if (-not (Test-Path -LiteralPath $exe)) { throw 'compile produced no exe' }
+
+$distFiles = @(Get-ChildItem -LiteralPath $dist -File)
+if ($distFiles.Count -ne 1 -or $distFiles[0].Name -ne 'JianFanConverter.exe') {
+    throw ('dist must contain exactly JianFanConverter.exe, found: ' + ($distFiles.Name -join ', '))
+}
 
 Write-Host ''
 Write-Host 'BUILD OK'
-Write-Host ('  exe: ' + $exe)
-Write-Host ('  icon: ' + $(if ($iconOk) { $ico } else { '(none)' }))
+Write-Host ('  exe: ' + $exe + ' (' + [math]::Round((Get-Item -LiteralPath $exe).Length / 1KB, 0) + ' KB)')
+Write-Host ('  icon: ' + $(if ($iconOk) { 'embedded via /win32icon' } else { '(none)' }))
+Write-Host ('  assets: ' + $runtime.Count + ' embedded (JianFanConverter.Runtime.*)')
+Write-Host ('  dist: ' + $distFiles.Count + ' file(s)')
+foreach ($df in $distFiles) { Write-Host ('    ' + $df.Name + '  ' + [math]::Round($df.Length / 1KB, 0) + ' KB') }

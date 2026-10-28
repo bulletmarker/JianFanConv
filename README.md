@@ -2,17 +2,17 @@
 
 一个本地离线的简体 ↔ 繁体中文转换小工具。左侧粘贴/输入原文，右侧实时显示转换结果，基于 OpenCC 引擎，全程本地运行，无任何网络请求。
 
-**自带 OpenCC 引擎**：运行和构建都只依赖本目录内的文件，完全离线，可独立分发或迁移。
+**自带 OpenCC 引擎**：运行和构建都只依赖本目录内的文件，完全离线，可独立分发或迁移。运行时资产在编译时内嵌进 exe，分发只需要一个文件。
 
 ## 独立性
 
 | 场景 | 依赖 |
 | --- | --- |
-| 运行 `dist\JianFanConverter.exe` | `dist\` 内的 9 个文件；.NET Framework 4.8（Win10/11 自带）；win-x64 |
+| 运行 `dist\JianFanConverter.exe` | 只有这 **1 个 exe**；.NET Framework 4.8（Win10/11 自带）；win-x64 |
 | 重新构建 `build.ps1` | `src\Program.cs` + `vendor\opencc\` 内的引擎文件 + 系统自带 `csc.exe` |
 
-- `dist\` 整个目录可以直接拷到任意位置（或另一台 Win10/11 x64 电脑）运行。
-- `vendor\opencc\` 是项目自带的 OpenCC 引擎副本（`opencc.dll` + 词典 + 许可），`build.ps1` 只从这里复制，**不读取任何外部安装目录，也不访问网络**。
+- 单个 `dist\JianFanConverter.exe` 可以直接拷到任意位置（或另一台 Win10/11 x64 电脑）运行，不需要附带其它文件。
+- `vendor\opencc\` 是项目自带的 OpenCC 引擎副本（`opencc.dll` + 词典 + 许可），`build.ps1` 只从这里读取并作为资源嵌入，**不读取任何外部安装目录，也不访问网络**。
 - OpenCC 运行时资产的来源与授权见 `vendor\opencc\NOTICE.txt`；项目内不含任何 GPL 代码。
 
 ## 功能
@@ -32,7 +32,9 @@
 dist\JianFanConverter.exe
 ```
 
-要求：Windows 10/11 **x64**，.NET Framework 4.8 运行时（Win10/11 自带）。`opencc.dll`、`s2t.json`、`t2s.json` 及 4 个 `.ocd2` 词典文件必须与 exe 同目录（`dist\` 内已随构建一并复制）。若缺少这些文件，程序启动时会用中文弹窗指明缺失的文件名。
+要求：Windows 10/11 **x64**，.NET Framework 4.8 运行时（Win10/11 自带）。只需这一个 exe：`opencc.dll`、`s2t.json`、`t2s.json` 及 4 个 `.ocd2` 词典文件已经在编译时内嵌进程序里，**不需要**放在 exe 旁边。
+
+首次运行时程序会把内置的 OpenCC 运行时释放到 `%LOCALAPPDATA%\JianFanConv\runtime-r1\`（该目录不可写时退到 `%TEMP%\JianFanConv\runtime-r1\`），之后的启动直接复用已释放的文件。若释放失败或文件不可用，程序会用中文弹窗说明原因。
 
 > 从仓库克隆的代码不包含 `dist\`（构建产物不入库），请先按下一节构建。
 
@@ -46,15 +48,17 @@ dist\JianFanConverter.exe
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-脚本会：清理并重建 `dist\` → **从项目内的 `vendor\opencc\` 复制 7 个 OpenCC 运行时文件** → 用 System.Drawing 生成应用图标 `dist\app.ico`（失败则跳过，不阻塞构建）→ 调用系统自带的 `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe` 编译（`/target:winexe /platform:x64 /codepage:65001`）。
+脚本会：清理并重建 `dist\` → 校验项目内 `vendor\opencc\` 的 7 个 OpenCC 运行时文件并**以 `/resource` 编译为内嵌资源**（`JianFanConverter.Runtime.<文件名>`）→ 用 System.Drawing 生成临时图标 `dist\app.ico` 供 `/win32icon` 使用（失败则跳过，不阻塞构建；编译后删除）→ 调用系统自带的 `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe` 编译（`/target:winexe /platform:x64 /codepage:65001`）。
+
+构建完成后 `dist\` 里只有 `JianFanConverter.exe` 一个文件。
 
 ## 修改指南
 
-源码只有一个文件 `src\Program.cs`（约 990 行），按顺序分成四块：
+源码只有一个文件 `src\Program.cs`（约 1130 行），按顺序分成四块：
 
 | 区域 | 内容 |
 | --- | --- |
-| `OpenCC` / `OpenCCEngine` | P/Invoke 互操作、实例缓存、线程锁、启动文件检查 |
+| `RuntimeAssets` / `OpenCC` / `OpenCCEngine` | 内嵌运行时释放与缓存、P/Invoke 互操作、实例缓存、线程锁、启动文件检查 |
 | `Theme` | 全部颜色（`#F3F4F6` 背景、`#2563EB` 主色…）与字体，改外观先改这里 |
 | 自绘控件 | `SegmentedControl`（方向切换）、`FlatButton`、`LinkButton`、`RoundedCard`、`HeaderPanel` |
 | `MainForm` | 布局、防抖、转换、粘贴/复制/清空等交互 |
@@ -73,15 +77,15 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ```
 JianFanConv\
-├── build.ps1                    构建脚本（从 vendor 复制运行时、生成图标、编译）
+├── build.ps1                    构建脚本（校验并内嵌运行时、生成图标、编译）
 ├── README.md                    本文档
 ├── LICENSE                      应用代码 MIT 许可
 ├── AGENTS.md                    维护者 / AI agent 约定
 ├── .gitignore                   忽略 dist/ 与临时文件
 ├── src\
-│   └── Program.cs               全部源码（WinForms UI + OpenCC P/Invoke）
+│   └── Program.cs               全部源码（WinForms UI + OpenCC P/Invoke + 运行时释放）
 ├── vendor\
-│   └── opencc\                  项目自带的 OpenCC 引擎（构建素材，不会被修改）
+│   └── opencc\                  项目自带的 OpenCC 引擎（构建期素材，编译时嵌入 exe）
 │       ├── opencc.dll           OpenCC C API 原生库（Windows x64）
 │       ├── s2t.json / t2s.json  转换配置
 │       ├── STPhrases.ocd2 / STCharacters.ocd2
@@ -89,15 +93,14 @@ JianFanConv\
 │       ├── LICENSE              Apache License 2.0
 │       └── NOTICE.txt           来源与授权说明
 └── dist\                        编译产物，不入库（可直接分发）
-    ├── JianFanConverter.exe     x64 主程序
-    ├── app.ico                  构建时生成的图标
-    └── （其余 7 个文件从 vendor 复制）
+    └── JianFanConverter.exe     x64 主程序（唯一文件，7 个运行时资产已内嵌）
 ```
 
 ## 技术说明
 
 - 通过 P/Invoke 调用 `opencc.dll`（`opencc_open_w` / `opencc_convert_utf8` / `opencc_convert_utf8_free` 等），每个方向缓存一个 OpenCC 实例并加锁（C API 非线程安全），退出时释放句柄
-- 启动时调用 `SetDllDirectory(exe 所在目录)`，保证原生 DLL 始终从程序目录解析；配置用绝对路径传给 `opencc_open_w`，因此程序可从任意工作目录启动
+- 启动时把内嵌的 7 个 OpenCC 运行时资产释放到 `%LOCALAPPDATA%\JianFanConv\runtime-r1\`（不可写时退到 `%TEMP%`），随后调用 `SetDllDirectory(缓存目录)` 保证原生 DLL 从缓存目录解析；配置用绝对路径传给 `opencc_open_w`，因此 exe 和程序工作目录都可以任意放置
+- 缓存按 `runtime-<tag>` 命名：只用已存在且长度与内嵌资源一致的文件，缺失或长度不符才重新释放；旧 tag 目录不清理（可能是另一个仍在运行的实例）
 - 转换在后台线程执行，防抖 + 版本号丢弃过期结果，界面不卡顿
 - 未处理异常会写入 `%TEMP%\JianFanConverter-error.log` 并弹窗提示
 
