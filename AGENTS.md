@@ -135,6 +135,7 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - GitHub 侧内容由工作流从 Gitee `--mirror` 强推而来：Gitee 上删掉的分支/标签，GitHub 上也会被删；不要在 GitHub 侧直接提交或开分支，会被下一次同步覆盖。
 - 工作流生效有前提：`.github/workflows/sync-from-gitee.yml` 必须已在 GitHub 的默认分支上，否则它没机会运行。首次落地要同时推 Gitee 和 GitHub 各一次，之后才是 Gitee 单推。
 - GitHub Actions 的 `schedule` 在免费额度下经常延迟十几分钟甚至更久，不能当作「秒级同步」用；需要立刻同步就 `gh workflow run sync-from-gitee.yml`。
+- `--mirror` 只同步 git 引用（分支 / 标签 / 提交），**Gitee 的发行版与附件不会出现在 GitHub**。两边 release 要分别创建：Gitee 网页上传 zip，GitHub 侧用 `gh release create v<版本> JianFanConverter-v<版本>-win-x64.zip --notes-file ...`。
 - 默认分支 `master`；远程配置以 `git remote -v` 为准。
 
 ## 发布流程
