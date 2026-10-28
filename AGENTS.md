@@ -137,6 +137,8 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - 工作流生效有前提：`.github/workflows/sync-from-gitee.yml` 必须已在 GitHub 的默认分支上，否则它没机会运行。首次落地要同时推 Gitee 和 GitHub 各一次，之后才是 Gitee 单推。
 - GitHub Actions 的 `schedule` 在免费额度下经常延迟十几分钟甚至更久，不能当作「秒级同步」用；需要立刻同步就 `gh workflow run sync-from-gitee.yml`。
 - `--mirror` 只同步 git 引用（分支 / 标签 / 提交），**Gitee 的发行版与附件不会出现在 GitHub**。两边 release 要分别创建：Gitee 网页上传 zip，GitHub 侧用 `gh release create v<版本> JianFanConverter-v<版本>-win-x64.zip --notes-file ...`。
+- Gitee API 的响应头不带 `charset`，PowerShell 的 `Invoke-RestMethod` 会按 Latin-1 解码，`name` / `body` 全是乱码（`id` 和附件名是 ASCII，不受影响）。要校验 Gitee 返回的中文，用 `curl.exe` 落盘再以 UTF-8 解析，别用 `Invoke-RestMethod` 直接比较。
+- Gitee 创建发行版只接受 **form 编码**（JSON body 会返回 `405 Not Allowed`）；查询不存在的 tag 返回 **HTTP 200 + body `null`**（不是 404），所以判断「发行版是否已存在」要看 `id` 而不是状态码。
 - 默认分支 `master`；远程配置以 `git remote -v` 为准。
 
 ## 发布流程
