@@ -35,7 +35,8 @@ JianFanConv/
 ├── .gitignore                忽略 dist/、运行时缓存与发布临时文件
 ├── LICENSE                   应用代码 MIT 许可
 ├── AGENTS.md                 维护者 / agent 约定（本文件）
-└── README.md                 面向使用者的运行 / 构建 / 修改说明
+├── README.md                 面向使用者的运行 / 构建 / 修改说明（中文，主文档）
+└── README.en.md              英文摘要（入口级文档，链接回中文版）
 ```
 
 ## WHERE TO LOOK
@@ -101,7 +102,8 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - **原生互操作**：`opencc_open_w` 传绝对宽字符路径；`SetDllDirectory(<释放目录>)` 必须在**任何** `opencc` DllImport 之前执行；每个方向缓存一个实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
 - **素材流向单一**：`vendor/opencc/` → 编译期 `/resource:...,JianFanConverter.Runtime.<文件名>` → 运行时释放到缓存；`dist/` 只有 exe，是生成物。
 - **UI 文案中文**：沿用 OpenCC 术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
-- **提交范围**：只提交 `src/`、`vendor/`、`.github/`、`build.ps1`、`README.md`、`AGENTS.md`、`LICENSE`；`dist/`、`*.zip`、`release-notes-*.md` 都不入库（已在 `.gitignore`）。
+- **提交范围**：只提交 `src/`、`vendor/`、`.github/`、`build.ps1`、`release.ps1`、`README.md`、`README.en.md`、`AGENTS.md`、`LICENSE`；`dist/`、`*.zip`、`release-notes-*.md` 都不入库（已在 `.gitignore`）。
+- **英文文档**：`README.en.md` 是「摘要 + 链接」，不追求与中文版对等；只在功能增删或运行要求变化时同步，纯措辞调整不跟。`AGENTS.md` 不翻译。
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
