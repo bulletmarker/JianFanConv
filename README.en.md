@@ -8,7 +8,7 @@ A portable, fully offline Windows app for Simplified ↔ Traditional Chinese con
 - **Fully offline**: OpenCC is embedded into the exe at compile time. The app makes no network requests.
 - **No config, no leftovers**: nothing is written to the registry; the only disk write is a runtime cache you can delete at any time.
 
-<!-- screenshot: docs/screenshot.png -->
+![JianFanConverter](docs/screenshot.png)
 
 ## Download
 

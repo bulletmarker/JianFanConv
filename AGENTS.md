@@ -29,10 +29,10 @@ JianFanConv/
 ├── .github/workflows/        定时把 Gitee 镜像到 GitHub 的工作流
 ├── src/Program.cs            唯一源码（约 1150 行）
 ├── vendor/opencc/            内置 OpenCC 引擎+词库+许可（构建期素材；编译时嵌入 exe）
-├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）
-├── release.ps1               一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
+├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）├── release.ps1               一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
 ├── dist/                     构建产物（已 gitignore；只有 JianFanConverter.exe）
 ├── .gitignore                忽略 dist/、运行时缓存与发布临时文件
+├── docs/screenshot.png       README 用的界面截图（客户区，无标题栏）
 ├── LICENSE                   应用代码 MIT 许可
 ├── AGENTS.md                 维护者 / agent 约定（本文件）
 ├── README.md                 面向使用者的运行 / 构建 / 修改说明（中文，主文档）
