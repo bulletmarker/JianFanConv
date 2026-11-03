@@ -30,6 +30,7 @@ JianFanConv/
 ├── src/Program.cs            唯一源码（约 1150 行）
 ├── vendor/opencc/            内置 OpenCC 引擎+词库+许可（构建期素材；编译时嵌入 exe）
 ├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）├── release.ps1               一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
+├── tools/screenshot.ps1      重新生成 README 截图（PrintWindow 渲染，不读桌面）
 ├── dist/                     构建产物（已 gitignore；只有 JianFanConverter.exe）
 ├── .gitignore                忽略 dist/、运行时缓存与发布临时文件
 ├── docs/screenshot.png       README 用的界面截图（客户区，无标题栏）
@@ -53,6 +54,7 @@ JianFanConv/
 | 改构建 / 打包 | `build.ps1` | 只从 `vendor/` 取素材并以 `/resource` 内嵌 |
 | 升级 OpenCC | `vendor/opencc/` | 必须同步 LICENSE / NOTICE.txt，并 bump `RuntimeTag` |
 | 发版 | 本文「发布流程」 | 构建 → 压缩 → 打 tag → 推 Gitee（GitHub 自动镜像） |
+| 重新生成 README 截图 | `tools/screenshot.ps1` | 改过 UI 后跑一次；`PrintWindow` 渲染客户区 |
 
 ## CODE MAP
 
@@ -102,7 +104,7 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - **原生互操作**：`opencc_open_w` 传绝对宽字符路径；`SetDllDirectory(<释放目录>)` 必须在**任何** `opencc` DllImport 之前执行；每个方向缓存一个实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
 - **素材流向单一**：`vendor/opencc/` → 编译期 `/resource:...,JianFanConverter.Runtime.<文件名>` → 运行时释放到缓存；`dist/` 只有 exe，是生成物。
 - **UI 文案中文**：沿用 OpenCC 术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
-- **提交范围**：只提交 `src/`、`vendor/`、`.github/`、`build.ps1`、`release.ps1`、`README.md`、`README.en.md`、`AGENTS.md`、`LICENSE`；`dist/`、`*.zip`、`release-notes-*.md` 都不入库（已在 `.gitignore`）。
+- **提交范围**：只提交 `src/`、`vendor/`、`.github/`、`tools/`、`build.ps1`、`release.ps1`、`README.md`、`README.en.md`、`AGENTS.md`、`LICENSE`；`dist/`、`*.zip`、`release-notes-*.md` 都不入库（已在 `.gitignore`）。
 - **英文文档**：`README.en.md` 是「摘要 + 链接」，不追求与中文版对等；只在功能增删或运行要求变化时同步，纯措辞调整不跟。`AGENTS.md` 不翻译。
 
 ## ANTI-PATTERNS (THIS PROJECT)
