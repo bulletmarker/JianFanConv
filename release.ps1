@@ -278,9 +278,18 @@ if ($SkipGitHub) {
         $remoteTag = (& git ls-remote github ('refs/tags/' + $tag))
         if (-not $remoteTag) { Fail ('tag not present on GitHub after mirroring: ' + $tag) }
 
+        # gh writes "release not found" to stderr for a missing tag; with
+        # ErrorActionPreference=Stop that would abort the run, so relax it for this
+        # probe and judge by the exit code only.
         $hasRelease = $false
-        & gh release view $tag --repo $slug *> $null
-        if ($LASTEXITCODE -eq 0) { $hasRelease = $true }
+        $previousEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & gh release view $tag --repo $slug 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { $hasRelease = $true }
+        } finally {
+            $ErrorActionPreference = $previousEap
+        }
 
         if ($hasRelease) {
             Write-Host ('github release already exists: ' + $tag)
