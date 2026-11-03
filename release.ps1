@@ -87,8 +87,13 @@ if ($SkipBuild) {
     Step 'build: skipped'
 } else {
     Step 'build'
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $root 'build.ps1')
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $root 'build.ps1') -Version $Version
     if ($LASTEXITCODE -ne 0) { Fail "build.ps1 failed with exit code $LASTEXITCODE" }
+    $builtVersion = (Get-Item -LiteralPath $exePath).VersionInfo.FileVersion
+    Write-Host ('exe version: ' + $builtVersion)
+    if ($builtVersion -ne ($Version + '.0')) {
+        Fail ('exe reports version ' + $builtVersion + ', expected ' + $Version + '.0')
+    }
 }
 if (-not (Test-Path -LiteralPath $exePath)) { Fail ('missing ' + $exePath) }
 $distFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'dist') -File)
@@ -101,13 +106,49 @@ if ($SkipZip) {
 } else {
     Step 'package'
     if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
-    Compress-Archive -Path (Join-Path $root 'dist\*') -DestinationPath $zipPath -CompressionLevel Optimal
+
+    # Apache-2.0 section 4 and the MIT terms both require the license text to travel
+    # with the binary, so the archive ships two extra files beside the exe. dist\ is
+    # left alone: it stays a plain build output with a single file.
+    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ('jfconv-release-' + [System.Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $stage -Force | Out-Null
+    try {
+        Copy-Item -LiteralPath $exePath -Destination (Join-Path $stage 'JianFanConverter.exe')
+        Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
+
+        $apache = [System.IO.File]::ReadAllText((Join-Path $root 'vendor\opencc\LICENSE'), [System.Text.Encoding]::UTF8)
+        $notice = [System.IO.File]::ReadAllText((Join-Path $root 'vendor\opencc\NOTICE.txt'), [System.Text.Encoding]::UTF8)
+        $header = @'
+JianFanConverter - third-party notices
+======================================
+
+This application embeds the OpenCC engine and its dictionaries at compile time
+and extracts them to a per-user cache directory at runtime. Those components
+are distributed under the Apache License 2.0. The upstream NOTICE and the full
+license text follow below.
+
+'@
+        $divider = ('-' * 78) + "`r`n"
+        $thirdParty = $header +
+            $divider + 'NOTICE (from vendor/opencc/NOTICE.txt)' + "`r`n" + $divider + $notice + "`r`n" +
+            $divider + 'Apache License 2.0 (from vendor/opencc/LICENSE)' + "`r`n" + $divider + $apache
+        [System.IO.File]::WriteAllText((Join-Path $stage 'THIRD-PARTY-NOTICES.txt'), $thirdParty,
+            (New-Object System.Text.UTF8Encoding($false)))
+
+        Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
+    } finally {
+        if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+    }
+
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
     try {
-        if ($archive.Entries.Count -ne 1) { Fail ('zip must contain exactly 1 entry, found ' + $archive.Entries.Count) }
-        if ($archive.Entries[0].FullName -ne 'JianFanConverter.exe') {
-            Fail ('zip root entry mismatch: ' + $archive.Entries[0].FullName)
+        $names = @($archive.Entries | ForEach-Object { $_.FullName })
+        foreach ($required in @('JianFanConverter.exe', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt')) {
+            if ($names -notcontains $required) { Fail ('zip is missing ' + $required) }
+        }
+        if ($names.Count -ne 3) {
+            Fail ('zip must contain exactly 3 entries, found ' + $names.Count + ': ' + ($names -join ', '))
         }
     } finally {
         $archive.Dispose()

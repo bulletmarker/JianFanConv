@@ -1,5 +1,15 @@
 # JianFanConverter build script (PowerShell 5.1, ASCII only)
 # Builds dist\JianFanConverter.exe with the in-box .NET Framework compiler.
+#
+# Usage:
+#   powershell -ExecutionPolicy Bypass -File build.ps1
+#   powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.0.2
+#
+# -Version defaults to the newest git tag (v1.2.3 -> 1.2.3) and feeds only the
+# generated assembly metadata, so the source tree stays a single Program.cs.
+param(
+    [string]$Version = ''
+)
 $ErrorActionPreference = 'Stop'
 
 $root   = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -12,6 +22,17 @@ $vendor = Join-Path $root 'vendor\opencc'
 if (-not (Test-Path -LiteralPath $src))    { throw "source not found: $src" }
 if (-not (Test-Path -LiteralPath $csc))    { throw "compiler not found: $csc" }
 if (-not (Test-Path -LiteralPath $vendor)) { throw "vendored OpenCC assets not found: $vendor" }
+
+# 0. resolve the version: explicit -Version, else the newest tag, else 0.0.0
+if (-not $Version) {
+    $tag = (& git describe --tags --abbrev=0 2>$null)
+    if ($tag -and ($tag.Trim() -match '^v?(?<v>\d+\.\d+\.\d+)$')) {
+        $Version = $Matches['v']
+    } else {
+        $Version = '0.0.0'
+    }
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 1.2.3 (got '$Version')" }
 
 # 1. clean dist
 if (Test-Path -LiteralPath $dist) { Remove-Item -LiteralPath $dist -Recurse -Force }
@@ -73,7 +94,21 @@ catch {
     Write-Host ("WARNING: icon generation failed, building without icon: " + $_.Exception.Message)
 }
 
-# 4. compile
+# 4. generate assembly metadata into a temp file so the exe reports a version
+#    (kept out of the repo on purpose: the source tree stays one Program.cs)
+$versionFile = Join-Path ([System.IO.Path]::GetTempPath()) ('JianFanConv-version-' + [System.Guid]::NewGuid().ToString('N') + '.cs')
+$versionText = @"
+using System.Reflection;
+[assembly: AssemblyTitle("JianFanConverter")]
+[assembly: AssemblyDescription("Offline Simplified/Traditional Chinese converter (OpenCC)")]
+[assembly: AssemblyProduct("JianFanConverter")]
+[assembly: AssemblyVersion("$Version.0")]
+[assembly: AssemblyFileVersion("$Version.0")]
+[assembly: AssemblyInformationalVersion("$Version")]
+"@
+[System.IO.File]::WriteAllText($versionFile, $versionText, (New-Object System.Text.UTF8Encoding($false)))
+
+# 5. compile
 $exe = Join-Path $dist 'JianFanConverter.exe'
 $cscArgs = @(
     '/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/codepage:65001',
@@ -85,11 +120,16 @@ $cscArgs = @(
 )
 if ($iconOk) { $cscArgs += ('/win32icon:"' + $ico + '"') }
 $cscArgs += $resources
+$cscArgs += ('"' + $versionFile + '"')
 $cscArgs += ('"' + $src + '"')
 
-Write-Host 'compiling...'
-& $csc $cscArgs
-$exitCode = $LASTEXITCODE
+Write-Host ('compiling (version ' + $Version + ')...')
+try {
+    & $csc $cscArgs
+    $exitCode = $LASTEXITCODE
+} finally {
+    if (Test-Path -LiteralPath $versionFile) { Remove-Item -LiteralPath $versionFile -Force }
+}
 
 # app.ico is only a build input for /win32icon; keep dist down to the single exe
 if (Test-Path -LiteralPath $ico) { Remove-Item -LiteralPath $ico -Force }
@@ -104,6 +144,7 @@ if ($distFiles.Count -ne 1 -or $distFiles[0].Name -ne 'JianFanConverter.exe') {
 
 Write-Host ''
 Write-Host 'BUILD OK'
+Write-Host ('  version: ' + $Version)
 Write-Host ('  exe: ' + $exe + ' (' + [math]::Round((Get-Item -LiteralPath $exe).Length / 1KB, 0) + ' KB)')
 Write-Host ('  icon: ' + $(if ($iconOk) { 'embedded via /win32icon' } else { '(none)' }))
 Write-Host ('  assets: ' + $runtime.Count + ' embedded (JianFanConverter.Runtime.*)')
