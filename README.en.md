@@ -14,7 +14,7 @@ A portable, fully offline Windows app for Simplified ↔ Traditional Chinese con
 
 Get the latest `JianFanConverter-v*-win-x64.zip` from [GitHub Releases](https://github.com/bulletmarker/JianFanConv/releases/latest) (mirror: [Gitee Releases](https://gitee.com/machangsheng/jian-fan-conv/releases)).
 
-Unzip anywhere and run `JianFanConverter.exe`. The archive contains exactly one file.
+Unzip anywhere and run `JianFanConverter.exe`. The archive contains three files: the exe plus `LICENSE.txt` and `THIRD-PARTY-NOTICES.txt`. The two license files are not needed to run, but should be kept if you redistribute the app.
 
 Each release page lists the SHA256 of both the zip and the exe.
 

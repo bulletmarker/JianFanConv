@@ -30,13 +30,17 @@
 
 ## 运行
 
-直接双击：
+从发行版下载 zip 解压后，双击 `JianFanConverter.exe`。压缩包里共 3 个文件：
 
 ```
-dist\JianFanConverter.exe
+JianFanConverter.exe     主程序
+LICENSE.txt              本程序的 MIT 许可
+THIRD-PARTY-NOTICES.txt  OpenCC 的 Apache-2.0 许可与来源说明
 ```
 
-要求：Windows 10/11 **x64**，.NET Framework 4.8 运行时（Win10/11 自带）。只需这一个 exe：`opencc.dll`、`s2t.json`、`t2s.json` 及 4 个 `.ocd2` 词典文件已经在编译时内嵌进程序里，**不需要**放在 exe 旁边。
+后两个是许可证要求的伴随声明，删掉不影响运行，但重新分发时应随包保留。从源码构建的话，直接运行 `dist\JianFanConverter.exe`。
+
+要求：Windows 10/11 **x64**，.NET Framework 4.8 运行时（Win10/11 自带）。运行时只需要那一个 exe：`opencc.dll`、`s2t.json`、`t2s.json` 及 4 个 `.ocd2` 词典文件已经在编译时内嵌进程序里，**不需要**放在 exe 旁边。
 
 首次运行时程序会把内置的 OpenCC 运行时释放到 `%LOCALAPPDATA%\JianFanConv\runtime-r1\`（该目录不可写时退到 `%TEMP%\JianFanConv\runtime-r1\`），之后的启动直接复用已释放的文件。若释放失败或文件不可用，程序会用中文弹窗说明原因。
 
@@ -99,6 +103,8 @@ JianFanConv\
 └── dist\                        编译产物，不入库（可直接分发）
     └── JianFanConverter.exe     x64 主程序（唯一文件，7 个运行时资产已内嵌）
 ```
+
+发行版 zip 在 exe 之外还会附带 `LICENSE.txt` 与 `THIRD-PARTY-NOTICES.txt`，由 `release.ps1` 打包时生成——Apache-2.0 与 MIT 都要求许可声明随二进制一同分发。`dist\` 本身保持只有 exe。
 
 ## 技术说明
 

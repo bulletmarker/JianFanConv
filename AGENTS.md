@@ -79,7 +79,9 @@ JianFanConv/
 
 ```powershell
 # 构建（仓库根目录；无 SDK / 无 NuGet）
+# 版本号默认取最新 tag（v1.2.3 -> 1.2.3），只写进 exe 的程序集元数据，不产生源码文件
 powershell -ExecutionPolicy Bypass -File build.ps1
+powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.0.2
 
 # 运行（构建后生成；dist 内只有这一个文件）
 dist\JianFanConverter.exe
@@ -103,6 +105,7 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - **build.ps1 保持 ASCII**：图标里的「简」用 `[char]0x7B80` 生成；不要加入中文字面量（PowerShell 5.1 无 BOM 会乱码）。
 - **原生互操作**：`opencc_open_w` 传绝对宽字符路径；`SetDllDirectory(<释放目录>)` 必须在**任何** `opencc` DllImport 之前执行；每个方向缓存一个实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
 - **素材流向单一**：`vendor/opencc/` → 编译期 `/resource:...,JianFanConverter.Runtime.<文件名>` → 运行时释放到缓存；`dist/` 只有 exe，是生成物。
+- **许可随包分发**：发布 zip 必须包含 `LICENSE.txt`（MIT）与 `THIRD-PARTY-NOTICES.txt`（Apache-2.0 全文 + OpenCC NOTICE）。Apache-2.0 §4 与 MIT 都要求声明随二进制分发；`release.ps1` 打包时自动生成，`dist/` 仍只放 exe。
 - **UI 文案中文**：沿用 OpenCC 术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
 - **提交范围**：只提交 `src/`、`vendor/`、`.github/`、`tools/`、`build.ps1`、`release.ps1`、`README.md`、`README.en.md`、`AGENTS.md`、`LICENSE`；`dist/`、`*.zip`、`release-notes-*.md` 都不入库（已在 `.gitignore`）。
 - **英文文档**：`README.en.md` 是「摘要 + 链接」，不追求与中文版对等；只在功能增删或运行要求变化时同步，纯措辞调整不跟。`AGENTS.md` 不翻译。
@@ -156,6 +159,8 @@ powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.2
 - `release.ps1` 的 `GITEE_TOKEN`（Gitee 私人令牌，需 `projects` 权限）从环境变量读取，顺序为进程 → User → Machine；**不要写进任何文件或提交**。
 - 只重跑某一环时用开关：`-SkipBuild` / `-SkipZip` / `-SkipGitPush` / `-SkipGitee` / `-SkipGitHub`。脚本对已存在的 tag、发行版、同名附件都是幂等的，可以安全重跑。
 - 脚本是 **ASCII-only**（同 `build.ps1` 的理由）；发行版标题从说明文件的标题行派生，不要在脚本里写中文字面量。
+- 脚本会把 `-Version` 传给 `build.ps1` 并校验 exe 的 `FileVersion`，避免 tag 与二进制版本号不一致。
+- 发布 zip = `JianFanConverter.exe` + `LICENSE.txt` + `THIRD-PARTY-NOTICES.txt`；`dist/` 仍只有 exe。
 - 手动兜底流程：`build.ps1` → `Compress-Archive -Path dist\*`（注意 `dist\*`，不要用 `dist`，否则解压多一层目录）→ `git tag -a` → `git push origin master --tags` → Gitee 网页建 release 上传 zip。
 - `git push origin` 只推 Gitee（唯一真源）。GitHub 通常十几分钟内自动同步；想立刻同步用 `gh workflow run sync-from-gitee.yml`。
 - 需要应急直推 GitHub 时用 `git push github master --tags`（`github` remote 仍保留）。
