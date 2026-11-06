@@ -61,6 +61,16 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 构建完成后 `dist\` 里只有 `JianFanConverter.exe` 一个文件。
 
+## 自检
+
+构建后可以跑 UI 冒烟脚本（自动构建、冷启动、切换全部转换模式，并验证复制/清空）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\smoke.ps1
+```
+
+脚本用真实鼠标点击「复制 / 清空」，会短暂把窗口置前并移动光标，结束后恢复。无法使用真实鼠标的环境（如部分远程/无桌面会话）加 `-SkipInteractive`；已有构建产物时加 `-SkipBuild`。
+
 ## 修改指南
 
 源码只有一个文件 `src\Program.cs`（约 1360 行），按顺序分成四块：
@@ -93,6 +103,9 @@ JianFanConv\
 ├── LICENSE                      应用代码 MIT 许可
 ├── AGENTS.md                    维护者 / AI agent 约定
 ├── .gitignore                   忽略 dist/ 与临时文件
+├── tools\
+│   ├── screenshot.ps1           重新生成 README 截图
+│   └── smoke.ps1                UI 冒烟测试
 ├── src\
 │   └── Program.cs               全部源码（WinForms UI + OpenCC P/Invoke + 运行时释放）
 ├── vendor\

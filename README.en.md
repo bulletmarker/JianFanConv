@@ -57,6 +57,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 `dist\` then contains exactly one file, `JianFanConverter.exe`. The build embeds the 30 OpenCC assets from `vendor\opencc\` as resources; that folder is never modified.
 
+Run `tools\smoke.ps1` for the automated UI smoke test (build, cold start, every conversion mode, copy/clear). It briefly brings the window forward and moves the mouse; add `-SkipInteractive` on sessions without a real desktop.
+
 ## License
 
 - Application code: [MIT](LICENSE)

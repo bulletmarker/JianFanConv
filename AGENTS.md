@@ -31,6 +31,7 @@ JianFanConv/
 ├── vendor/opencc/            内置 OpenCC 引擎 + 标准/台湾/香港配置与词库 + 许可（构建期素材；编译时嵌入 exe）
 ├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）├── release.ps1               一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
 ├── tools/screenshot.ps1      重新生成 README 截图（PrintWindow 渲染，不读桌面）
+├── tools/smoke.ps1           UI 冒烟（构建 + 冷启动 + 全部转换模式 + 复制/清空）
 ├── dist/                     构建产物（已 gitignore；只有 JianFanConverter.exe）
 ├── .gitignore                忽略 dist/、运行时缓存与发布临时文件
 ├── docs/screenshot.png       README 用的界面截图（客户区，无标题栏）
@@ -57,6 +58,7 @@ JianFanConv/
 | 升级 OpenCC | `vendor/opencc/` | 必须同步 LICENSE / NOTICE.txt，并 bump `RuntimeTag` |
 | 发版 | 本文「发布流程」 | 构建 → 压缩 → 打 tag → 推 Gitee（GitHub 自动镜像） |
 | 重新生成 README 截图 | `tools/screenshot.ps1` | 改过 UI 后跑一次；`PrintWindow` 渲染客户区 |
+| 跑 UI 冒烟 | `tools/smoke.ps1` | 构建 → 冷启动 → 全部转换模式 + 复制/清空；`-SkipBuild` / `-SkipInteractive` |
 
 ## CODE MAP
 
@@ -90,11 +92,15 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.0.2
 # 运行（构建后生成；dist 内只有这一个文件）
 dist\JianFanConverter.exe
 
+# UI 冒烟（构建 + 冷启动 + 全部转换模式 + 复制/清空；会短暂把窗口置前）
+powershell -ExecutionPolicy Bypass -File tools\smoke.ps1
+powershell -ExecutionPolicy Bypass -File tools\smoke.ps1 -SkipBuild -SkipInteractive
+
 # 冷启动复现（清掉运行时缓存，验证首次释放）
 Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
-`dist/` 不入库，新克隆的仓库没有 exe，必须先构建。无测试框架、无 CI。改完必须做的最小自检：
+`dist/` 不入库，新克隆的仓库没有 exe，必须先构建。无单元测试框架、无 CI；`tools/smoke.ps1` 覆盖下面的 1–5 项。改完必须做的最小自检：
 
 1. 默认（台湾 + 地区用词）：`汉字转换测试，软件和硬件。` → `漢字轉換測試，軟體和硬體。`
 2. 切「标准」：同一输入 → `漢字轉換測試，軟件和硬件。`
@@ -102,6 +108,8 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 4. 繁→简（台湾 + 地区用词）：`漢字轉換測試，軟體和硬體。` → `汉字转换测试，软件和硬件。`
 5. `复制` 后剪贴板 = 右栏内容；`清空` 后两栏为空。
 6. 单文件分发：把 `dist\JianFanConverter.exe` **单独**拷到空目录运行，确认能转换（不是只在仓库里能跑）。
+
+前 5 项可一键跑 `tools/smoke.ps1`；第 6 项仍需手工验证。
 
 ## CONVENTIONS (deviations only)
 
@@ -146,6 +154,7 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - PowerShell 5.1 的 `.ps1` 若含中文必须存成 **UTF-8 with BOM**；无 BOM 会按 ANSI 解析导致语法错误。仓库内 `.ps1` 一律 ASCII-only 就是为了避开它。
 - PowerShell 脚本里不要用 `$input` / `$output` 作变量名（`$input` 是自动变量，函数内会被管道枚举器覆盖）。
 - UI 自动化（坐标陷阱）：`WM_LBUTTONDOWN/UP` 的 lParam 必须是 **client 相对坐标**；`GetWindowRect` 给的是屏幕坐标，直接当 client 坐标用会越界，`SegmentedControl.HitSegment` 返回 -1，点击静默失效。
+- UI 自动化（自绘按钮）：`FlatButton` / `LinkButton` 即使收到坐标正确的 `WM_LBUTTONDOWN/UP` 也不会触发 `Click`；`tools/smoke.ps1` 因此用真实鼠标（`SetForegroundWindow` + `SetCursorPos` + `mouse_event`）点复制/清空，结束后恢复光标与前台窗口。
 - 控件枚举：`EnumChildWindows` 本身就会递归枚举全部后代；再手动递归会重复计数（表现为 EDIT 控件数量翻倍）。按 HWND 去重。
 - 截图需 DPI 感知 + `DWMWA_EXTENDED_FRAME_BOUNDS`，否则边缘会带入其它窗口内容。
 - 布局按物理像素写死、字体按 DPI 放大；高缩放下比例会变，改布局时在 100% / 125% 都看一眼。
