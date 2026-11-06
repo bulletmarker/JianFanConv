@@ -202,22 +202,29 @@ if ($SkipGitee) {
         # The create endpoint only accepts form data; a JSON body answers 405.
         # curl.exe is used because PowerShell 5.1 mangles UTF-8 in form bodies.
         $titleFile = Join-Path ([System.IO.Path]::GetTempPath()) ('jfconv-title-' + $Version + '.txt')
+        $responseFile = Join-Path ([System.IO.Path]::GetTempPath()) ('jfconv-release-' + $Version + '.json')
         [System.IO.File]::WriteAllText($titleFile, $title, (New-Object System.Text.UTF8Encoding($false)))
+        $bodyText = ''
         try {
-            $raw = & curl.exe -s -X POST `
+            & curl.exe -s -X POST `
                 --data-urlencode ('access_token=' + $token) `
                 --data-urlencode ('tag_name=' + $tag) `
                 --data-urlencode ('name@' + $titleFile) `
                 --data-urlencode ('body@' + $notesPath) `
                 --data-urlencode ('target_commitish=' + $tagCommit) `
                 --data-urlencode 'prerelease=false' `
+                -o $responseFile `
                 ($api + '/releases')
             if ($LASTEXITCODE -ne 0) { Fail "curl failed to create the release (exit $LASTEXITCODE)" }
+            # Reading the UTF-8 body from disk avoids the console code page that
+            # corrupts CJK when curl output is piped through PowerShell.
+            $bodyText = [System.IO.File]::ReadAllText($responseFile, [System.Text.Encoding]::UTF8)
+            $release = $bodyText | ConvertFrom-Json
         } finally {
             if (Test-Path -LiteralPath $titleFile) { Remove-Item -LiteralPath $titleFile -Force }
+            if (Test-Path -LiteralPath $responseFile) { Remove-Item -LiteralPath $responseFile -Force }
         }
-        $release = ($raw -join "`n") | ConvertFrom-Json
-        if (-not $release.id) { Fail ('release creation failed: ' + ($raw -join ' ')) }
+        if (-not $release.id) { Fail ('release creation failed: ' + $bodyText) }
         Write-Host ('created: id=' + $release.id)
     }
 
