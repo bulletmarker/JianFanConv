@@ -41,7 +41,19 @@ New-Item -ItemType Directory -Path $dist -Force | Out-Null
 # 2. collect the OpenCC runtime assets from the project's own vendor folder;
 #    they are embedded into the exe as resources (no copy into dist)
 #    (self-contained: no external install such as ConvertZZ is required)
-$runtime = @('opencc.dll','s2t.json','t2s.json','STPhrases.ocd2','STCharacters.ocd2','TSPhrases.ocd2','TSCharacters.ocd2')
+$runtime = @(
+    'opencc.dll',
+    's2t.json','t2s.json',
+    's2tw.json','tw2s.json','s2twp.json','tw2sp.json',
+    's2hk.json','hk2s.json','s2hkp.json','hk2sp.json',
+    'CJK_Compatibility_Ideographs.ocd2',
+    'STPhrases.ocd2','STCharacters.ocd2','STPhrases_GeneratedFromRegionalPhrases.ocd2',
+    'TSPhrases.ocd2','TSCharacters.ocd2','TSCharactersExt.ocd2',
+    'TWVariants.ocd2','TWVariantsPhrases.ocd2','TWVariantsRev.ocd2','TWVariantsRevPhrases.ocd2',
+    'TWPhrases.ocd2','TWPhrasesRev.ocd2',
+    'HKVariants.ocd2','HKVariantsPhrases.ocd2','HKVariantsRev.ocd2','HKVariantsRevPhrases.ocd2',
+    'HKPhrases.ocd2','HKPhrasesRev.ocd2'
+)
 $resources = @()
 foreach ($f in $runtime) {
     $from = Join-Path $vendor $f

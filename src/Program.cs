@@ -1,6 +1,7 @@
 ﻿// JianFanConverter - 简繁转换 (Simplified <-> Traditional Chinese converter)
 // WinForms, .NET Framework 4.8, x64. Offline conversion via OpenCC (opencc.dll).
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -115,14 +116,23 @@ namespace JianFanConverter
     {
         // Bump this when the contents of vendor/opencc change: it is part of the
         // cache directory name, so old extractions stay untouched and unused.
-        public const string RuntimeTag = "r1";
+        public const string RuntimeTag = "r2";
 
         private const string ResourcePrefix = "JianFanConverter.Runtime.";
 
         private static readonly string[] FileNames = new string[]
         {
-            "opencc.dll", "s2t.json", "t2s.json",
-            "STPhrases.ocd2", "STCharacters.ocd2", "TSPhrases.ocd2", "TSCharacters.ocd2"
+            "opencc.dll",
+            "s2t.json", "t2s.json",
+            "s2tw.json", "tw2s.json", "s2twp.json", "tw2sp.json",
+            "s2hk.json", "hk2s.json", "s2hkp.json", "hk2sp.json",
+            "CJK_Compatibility_Ideographs.ocd2",
+            "STPhrases.ocd2", "STCharacters.ocd2", "STPhrases_GeneratedFromRegionalPhrases.ocd2",
+            "TSPhrases.ocd2", "TSCharacters.ocd2", "TSCharactersExt.ocd2",
+            "TWVariants.ocd2", "TWVariantsPhrases.ocd2", "TWVariantsRev.ocd2", "TWVariantsRevPhrases.ocd2",
+            "TWPhrases.ocd2", "TWPhrasesRev.ocd2",
+            "HKVariants.ocd2", "HKVariantsPhrases.ocd2", "HKVariantsRev.ocd2", "HKVariantsRevPhrases.ocd2",
+            "HKPhrases.ocd2", "HKPhrasesRev.ocd2"
         };
 
         public static string Ensure()
@@ -354,12 +364,18 @@ namespace JianFanConverter
         }
     }
 
+    internal enum ChineseVariant
+    {
+        Standard = 0,
+        Taiwan = 1,
+        HongKong = 2
+    }
+
     internal static class OpenCCEngine
     {
         private static readonly object _gate = new object();
         private static string _runtimeDir;
-        private static OpenCC _s2t;
-        private static OpenCC _t2s;
+        private static readonly Dictionary<string, OpenCC> _instances = new Dictionary<string, OpenCC>();
 
         public static void SetRuntimeDirectory(string dir)
         {
@@ -369,25 +385,36 @@ namespace JianFanConverter
             }
         }
 
-        public static string Convert(string text, bool s2t)
+        public static string ResolveConfig(bool s2t, ChineseVariant variant, bool localPhrases)
+        {
+            switch (variant)
+            {
+                case ChineseVariant.Taiwan:
+                    if (s2t) return localPhrases ? "s2twp.json" : "s2tw.json";
+                    return localPhrases ? "tw2sp.json" : "tw2s.json";
+                case ChineseVariant.HongKong:
+                    if (s2t) return localPhrases ? "s2hkp.json" : "s2hk.json";
+                    return localPhrases ? "hk2sp.json" : "hk2s.json";
+                default:
+                    return s2t ? "s2t.json" : "t2s.json";
+            }
+        }
+
+        public static string Convert(string text, bool s2t, ChineseVariant variant, bool localPhrases)
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
+            string config = ResolveConfig(s2t, variant, localPhrases);
             lock (_gate)
             {
                 if (_runtimeDir == null)
                     throw new InvalidOperationException("OpenCC 运行时目录尚未初始化");
-                if (s2t)
+                OpenCC engine;
+                if (!_instances.TryGetValue(config, out engine))
                 {
-                    if (_s2t == null)
-                        _s2t = OpenCC.Open(Path.Combine(_runtimeDir, "s2t.json"));
-                    return _s2t.Convert(text);
+                    engine = OpenCC.Open(Path.Combine(_runtimeDir, config));
+                    _instances[config] = engine;
                 }
-                else
-                {
-                    if (_t2s == null)
-                        _t2s = OpenCC.Open(Path.Combine(_runtimeDir, "t2s.json"));
-                    return _t2s.Convert(text);
-                }
+                return engine.Convert(text);
             }
         }
 
@@ -395,8 +422,9 @@ namespace JianFanConverter
         {
             lock (_gate)
             {
-                if (_s2t != null) { _s2t.Dispose(); _s2t = null; }
-                if (_t2s != null) { _t2s.Dispose(); _t2s = null; }
+                foreach (OpenCC engine in _instances.Values)
+                    engine.Dispose();
+                _instances.Clear();
             }
         }
     }
@@ -489,61 +517,88 @@ namespace JianFanConverter
 
     internal sealed class SegmentedControl : Control
     {
-        private static readonly string[] Labels = new string[] { "简 → 繁", "繁 → 简" };
+        private readonly string[] _labels;
         private int _selected;
         private int _hover = -1;
 
-        public event EventHandler DirectionChanged;
+        public event EventHandler SelectionChanged;
+
+        public SegmentedControl(string[] labels, string accessibleName, int minSegmentWidth)
+        {
+            _labels = labels == null ? new string[0] : labels;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            BackColor = Theme.White;
+            Font = Theme.Base;
+            Height = 36;
+            int width = 0;
+            using (Graphics g = CreateGraphics())
+            {
+                foreach (string s in _labels)
+                    width += Math.Max(minSegmentWidth, TextRenderer.MeasureText(g, s, Font).Width + 24);
+            }
+            Width = width;
+            // UIA bridges the accessible Name from the window caption (Text),
+            // not AccessibleName; OnPaint never draws Text so this is safe.
+            Text = accessibleName;
+            AccessibleName = accessibleName;
+            TabStop = true;
+        }
+
+        public int Count
+        {
+            get { return _labels.Length; }
+        }
 
         public int SelectedIndex
         {
             get { return _selected; }
             set
             {
-                if (value < 0 || value > 1) value = 0;
+                if (value < 0) value = 0;
+                if (value > _labels.Length - 1) value = Math.Max(0, _labels.Length - 1);
                 if (_selected != value) { _selected = value; Invalidate(); }
             }
         }
 
-        public SegmentedControl()
+        public string SelectedLabel
         {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
-                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            BackColor = Theme.White;
-            Font = Theme.Base;
-            int segW = 96;
-            using (Graphics g = CreateGraphics())
-            {
-                foreach (string s in Labels)
-                    segW = Math.Max(segW, TextRenderer.MeasureText(g, s, Font).Width + 32);
-            }
-            Height = 36;
-            Width = segW * 2;
-            // UIA bridges the accessible Name from the window caption (Text),
-            // not AccessibleName; OnPaint never draws Text so this is safe.
-            Text = "方向切换";
-            AccessibleName = "方向切换";
-            TabStop = true;
+            get { return _labels.Length == 0 ? string.Empty : _labels[_selected]; }
+        }
+
+        private int SegmentWidth
+        {
+            get { return _labels.Length == 0 ? Width : Width / _labels.Length; }
+        }
+
+        private Rectangle SegmentRect(int index)
+        {
+            int segW = SegmentWidth;
+            int x = index * segW;
+            int w = index == _labels.Length - 1 ? Width - x : segW;
+            return new Rectangle(x, 0, w, Height);
         }
 
         private int HitSegment(Point pt)
         {
-            if (pt.X < 0 || pt.X >= Width) return -1;
-            return pt.X < Width / 2 ? 0 : 1;
+            if (pt.X < 0 || pt.X >= Width || _labels.Length == 0) return -1;
+            int index = pt.X / Math.Max(1, SegmentWidth);
+            if (index >= _labels.Length) index = _labels.Length - 1;
+            return index;
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            if (_labels.Length == 0) return;
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             Rectangle full = new Rectangle(0, 0, Width - 1, Height - 1);
             using (GraphicsPath outer = Theme.RoundPath(full, 8))
             {
                 System.Drawing.Region oldClip = e.Graphics.Clip;
                 e.Graphics.SetClip(outer);
-                int segW = Width / 2;
-                for (int i = 0; i < 2; i++)
+                for (int i = 0; i < _labels.Length; i++)
                 {
-                    Rectangle seg = new Rectangle(i * segW, 0, segW, Height);
+                    Rectangle seg = SegmentRect(i);
                     if (i == _selected)
                     {
                         using (SolidBrush b = new SolidBrush(Theme.Accent))
@@ -561,12 +616,11 @@ namespace JianFanConverter
                 using (Pen p = new Pen(Theme.Border))
                     e.Graphics.DrawPath(p, outer);
             }
-            int w = Width / 2;
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < _labels.Length; i++)
             {
-                Rectangle seg = new Rectangle(i * w, 0, w, Height);
+                Rectangle seg = SegmentRect(i);
                 Color fore = i == _selected ? Theme.White : Theme.TextBody;
-                TextRenderer.DrawText(e.Graphics, Labels[i], Font, seg, fore,
+                TextRenderer.DrawText(e.Graphics, _labels[i], Font, seg, fore,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
             }
         }
@@ -591,8 +645,7 @@ namespace JianFanConverter
             {
                 _selected = h;
                 Invalidate();
-                EventHandler handler = DirectionChanged;
-                if (handler != null) handler(this, EventArgs.Empty);
+                RaiseChanged();
             }
             base.OnMouseClick(e);
         }
@@ -605,14 +658,26 @@ namespace JianFanConverter
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Left && _selected != 0) { _selected = 0; Invalidate(); RaiseChanged(); e.Handled = true; }
-            else if (e.KeyCode == Keys.Right && _selected != 1) { _selected = 1; Invalidate(); RaiseChanged(); e.Handled = true; }
+            if (e.KeyCode == Keys.Left && _selected > 0)
+            {
+                _selected--;
+                Invalidate();
+                RaiseChanged();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Right && _selected < _labels.Length - 1)
+            {
+                _selected++;
+                Invalidate();
+                RaiseChanged();
+                e.Handled = true;
+            }
             base.OnKeyDown(e);
         }
 
         private void RaiseChanged()
         {
-            EventHandler handler = DirectionChanged;
+            EventHandler handler = SelectionChanged;
             if (handler != null) handler(this, EventArgs.Empty);
         }
     }
@@ -693,6 +758,120 @@ namespace JianFanConverter
         protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
     }
 
+    internal sealed class FlatCheckBox : Control
+    {
+        private bool _checked;
+        private bool _hover;
+
+        public event EventHandler CheckedChanged;
+
+        public FlatCheckBox()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            BackColor = Theme.White;
+            Font = Theme.Base;
+            Height = 26;
+            TabStop = true;
+            Cursor = Cursors.Hand;
+        }
+
+        public bool Checked
+        {
+            get { return _checked; }
+            set
+            {
+                if (_checked != value) { _checked = value; Invalidate(); }
+            }
+        }
+
+        public void SizeToText()
+        {
+            Size s = TextRenderer.MeasureText(Text, Font);
+            Height = Math.Max(26, s.Height);
+            Width = 24 + s.Width + 6;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            int box = 16;
+            int top = (Height - box) / 2;
+            bool on = _checked && Enabled;
+            Rectangle r = new Rectangle(0, top, box, box);
+            using (GraphicsPath path = Theme.RoundPath(r, 4))
+            {
+                using (SolidBrush b = new SolidBrush(on ? Theme.Accent : (_hover && Enabled ? Theme.Hover : Theme.White)))
+                    e.Graphics.FillPath(b, path);
+                using (Pen p = new Pen(on ? Theme.Accent : Theme.Border))
+                    e.Graphics.DrawPath(p, path);
+            }
+            if (on)
+            {
+                using (Pen p = new Pen(Theme.White, 2f))
+                {
+                    p.StartCap = LineCap.Round;
+                    p.EndCap = LineCap.Round;
+                    p.LineJoin = LineJoin.Round;
+                    e.Graphics.DrawLines(p, new PointF[]
+                    {
+                        new PointF(4f, top + 8f),
+                        new PointF(7f, top + 11f),
+                        new PointF(12f, top + 4.5f)
+                    });
+                }
+            }
+            Color fore = Enabled ? Theme.TextBody : Theme.TextMuted;
+            TextRenderer.DrawText(e.Graphics, Text, Font,
+                new Rectangle(24, 0, Width - 24, Height), fore,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            Invalidate();
+            base.OnEnabledChanged(e);
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            if (Enabled && e.Button == MouseButtons.Left)
+            {
+                _checked = !_checked;
+                Invalidate();
+                RaiseChanged();
+            }
+            base.OnMouseClick(e);
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            if (keyData == Keys.Space) return true;
+            return base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Space && Enabled)
+            {
+                _checked = !_checked;
+                Invalidate();
+                RaiseChanged();
+                e.Handled = true;
+            }
+            base.OnKeyDown(e);
+        }
+
+        private void RaiseChanged()
+        {
+            EventHandler handler = CheckedChanged;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
+    }
+
     // ------------------------------------------------------------------
     // Main form
     // ------------------------------------------------------------------
@@ -758,6 +937,8 @@ namespace JianFanConverter
     internal sealed class MainForm : Form
     {
         private bool _s2t = true;
+        private ChineseVariant _variant = ChineseVariant.Taiwan;
+        private bool _localPhrases = true;
         private int _version;
         private readonly System.Windows.Forms.Timer _debounce;
 
@@ -768,7 +949,18 @@ namespace JianFanConverter
         private Label _lblStatus;
         private Label _lblEngine;
         private Label _lblPlaceholder;
+        private HeaderPanel _header;
+        private Panel _toolbar;
+        private Panel _status;
+        private Label _lblTitle;
+        private Label _lblSubtitle;
+        private Panel _headLeft;
+        private Panel _headRight;
+        private Label _lblInputTitle;
+        private Label _lblOutputTitle;
         private SegmentedControl _seg;
+        private SegmentedControl _regionSeg;
+        private FlatCheckBox _chkPhrases;
         private FlatButton _btnClear;
         private LinkButton _btnPaste;
         private LinkButton _btnCopy;
@@ -794,9 +986,9 @@ namespace JianFanConverter
         private void BuildUi()
         {
             // ---- header -------------------------------------------------
-            HeaderPanel header = new HeaderPanel { Dock = DockStyle.Top, Height = 64 };
+            _header = new HeaderPanel { Dock = DockStyle.Top, Height = 64 };
 
-            Label lblTitle = new Label
+            _lblTitle = new Label
             {
                 Text = "简繁转换",
                 AutoSize = true,
@@ -805,7 +997,7 @@ namespace JianFanConverter
                 Location = new Point(20, 9),
                 BackColor = Color.Transparent
             };
-            Label lblSubtitle = new Label
+            _lblSubtitle = new Label
             {
                 Text = "OpenCC 本地离线",
                 AutoSize = true,
@@ -815,17 +1007,34 @@ namespace JianFanConverter
                 BackColor = Color.Transparent
             };
 
-            _seg = new SegmentedControl { TabIndex = 1, AccessibleName = "方向切换" };
-            _seg.DirectionChanged += OnDirectionChanged;
-
             _btnClear = new FlatButton { Text = "清空", TabIndex = 4, AccessibleName = "清空" };
             _btnClear.SizeToText();
             _btnClear.Click += delegate { ClearAll(); };
 
-            header.Controls.Add(_btnClear);
-            header.Controls.Add(_seg);
-            header.Controls.Add(lblSubtitle);
-            header.Controls.Add(lblTitle);
+            _header.Controls.Add(_btnClear);
+            _header.Controls.Add(_lblSubtitle);
+            _header.Controls.Add(_lblTitle);
+
+            // ---- toolbar: direction + region + phrases ------------------
+            _toolbar = new HeaderPanel { Dock = DockStyle.Top, Height = 52 };
+
+            _seg = new SegmentedControl(new string[] { "简 → 繁", "繁 → 简" }, "方向切换", 96);
+            _seg.TabIndex = 1;
+            _seg.SelectionChanged += OnDirectionChanged;
+
+            _regionSeg = new SegmentedControl(new string[] { "标准", "台湾", "香港" }, "繁体地区", 64);
+            _regionSeg.TabIndex = 6;
+            _regionSeg.SelectedIndex = (int)_variant;
+            _regionSeg.SelectionChanged += OnVariantChanged;
+
+            _chkPhrases = new FlatCheckBox { Text = "地区用词", TabIndex = 7, AccessibleName = "地区用词" };
+            _chkPhrases.SizeToText();
+            _chkPhrases.Checked = _localPhrases;
+            _chkPhrases.CheckedChanged += OnPhrasesChanged;
+
+            _toolbar.Controls.Add(_chkPhrases);
+            _toolbar.Controls.Add(_regionSeg);
+            _toolbar.Controls.Add(_seg);
 
             // ---- content: two cards ------------------------------------
             TableLayoutPanel table = new TableLayoutPanel
@@ -872,10 +1081,10 @@ namespace JianFanConverter
             bodyLeft.Controls.Add(_lblPlaceholder);
             _lblPlaceholder.BringToFront();
 
-            Panel headLeft = BuildCardHeader("原文", out _lblInputCount, out _btnPaste);
+            _headLeft = BuildCardHeader("原文", out _lblInputTitle, out _lblInputCount, out _btnPaste);
             _btnPaste.Click += delegate { PasteFromClipboard(); };
             cardLeft.Controls.Add(bodyLeft);
-            cardLeft.Controls.Add(headLeft);
+            cardLeft.Controls.Add(_headLeft);
 
             // right card: 结果
             RoundedCard cardRight = new RoundedCard { Dock = DockStyle.Fill, Margin = new Padding(6, 16, 16, 16) };
@@ -897,16 +1106,16 @@ namespace JianFanConverter
             };
             bodyRight.Controls.Add(_txtOutput);
 
-            Panel headRight = BuildCardHeader("结果", out _lblOutputCount, out _btnCopy);
+            _headRight = BuildCardHeader("结果", out _lblOutputTitle, out _lblOutputCount, out _btnCopy);
             _btnCopy.Click += delegate { CopyResult(); };
             cardRight.Controls.Add(bodyRight);
-            cardRight.Controls.Add(headRight);
+            cardRight.Controls.Add(_headRight);
 
             table.Controls.Add(cardLeft, 0, 0);
             table.Controls.Add(cardRight, 1, 0);
 
             // ---- status strip -------------------------------------------
-            Panel status = new Panel { Dock = DockStyle.Bottom, Height = 30, BackColor = Theme.Background };
+            _status = new Panel { Dock = DockStyle.Bottom, Height = 30, BackColor = Theme.Background };
             _lblStatus = new Label
             {
                 Text = "就绪",
@@ -925,13 +1134,14 @@ namespace JianFanConverter
                 BackColor = Color.Transparent,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-            status.Controls.Add(_lblEngine);
-            status.Controls.Add(_lblStatus);
+            _status.Controls.Add(_lblEngine);
+            _status.Controls.Add(_lblStatus);
 
             // Dock order: last added is docked first.
             Controls.Add(table);
-            Controls.Add(status);
-            Controls.Add(header);
+            Controls.Add(_status);
+            Controls.Add(_toolbar);
+            Controls.Add(_header);
 
             // events
             _txtInput.TextChanged += delegate
@@ -949,7 +1159,7 @@ namespace JianFanConverter
             Shown += OnShown;
         }
 
-        private Panel BuildCardHeader(string title, out Label counter, out LinkButton action)
+        private Panel BuildCardHeader(string title, out Label titleLabel, out Label counter, out LinkButton action)
         {
             Panel head = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = Theme.White };
             Label lbl = new Label
@@ -961,6 +1171,7 @@ namespace JianFanConverter
                 Location = new Point(16, 9),
                 BackColor = Color.Transparent
             };
+            titleLabel = lbl;
             counter = new Label
             {
                 Text = "0 字",
@@ -991,57 +1202,25 @@ namespace JianFanConverter
             {
                 // icon is optional
             }
-            // header layout that depends on measured label widths
-            Control header = Controls[2];
-            Label lblTitle = null, lblSubtitle = null;
-            foreach (Control c in header.Controls)
-            {
-                Label l = c as Label;
-                if (l == null) continue;
-                if (l.Text == "简繁转换") lblTitle = l;
-                else if (l.Text == "OpenCC 本地离线") lblSubtitle = l;
-            }
-            if (lblTitle != null && lblSubtitle != null)
-                _seg.Left = Math.Max(lblTitle.Right, lblSubtitle.Right) + 24;
-            _seg.Top = (header.Height - _seg.Height) / 2;
-            _btnClear.Left = header.Width - 20 - _btnClear.Width;
-            _btnClear.Top = (header.Height - _btnClear.Height) / 2;
-
-            // card header counters sit right after the title label
-            foreach (Control card in Controls[0].Controls) // table -> cards
-            {
-                foreach (Control c in card.Controls)
-                {
-                    Panel head = c as Panel;
-                    if (head == null || head.Height != 40) continue;
-                    Label title = null, count = null;
-                    LinkButton link = null;
-                    foreach (Control hc in head.Controls)
-                    {
-                        Label l = hc as Label;
-                        LinkButton lb = hc as LinkButton;
-                        if (l != null && (l.Text == "原文" || l.Text == "结果")) title = l;
-                        else if (l != null && l.Text.EndsWith("字")) count = l;
-                        else if (lb != null) link = lb;
-                    }
-                    if (title != null && count != null)
-                        count.Left = title.Right + 8;
-                    if (link != null)
-                        link.Left = head.Width - 16 - link.Width;
-                }
-            }
-
-            // status right label
-            Panel status = null;
-            foreach (Control c in Controls)
-            {
-                Panel p = c as Panel;
-                if (p != null && p.Dock == DockStyle.Bottom && p.Height == 30) status = p;
-            }
-            if (status != null)
-                _lblEngine.Left = status.Width - 20 - _lblEngine.Width;
-
+            _seg.Left = 20;
+            _seg.Top = (_toolbar.Height - _seg.Height) / 2;
+            _regionSeg.Left = _seg.Right + 24;
+            _regionSeg.Top = (_toolbar.Height - _regionSeg.Height) / 2;
+            _chkPhrases.Left = _regionSeg.Right + 24;
+            _chkPhrases.Top = (_toolbar.Height - _chkPhrases.Height) / 2;
+            _btnClear.Left = _header.Width - 20 - _btnClear.Width;
+            _btnClear.Top = (_header.Height - _btnClear.Height) / 2;
+            LayoutCardHeader(_headLeft, _lblInputTitle, _lblInputCount, _btnPaste);
+            LayoutCardHeader(_headRight, _lblOutputTitle, _lblOutputCount, _btnCopy);
+            _lblEngine.Left = _status.Width - 20 - _lblEngine.Width;
+            UpdatePhrasesEnabled();
             _txtInput.Focus();
+        }
+
+        private static void LayoutCardHeader(Panel head, Label title, Label counter, LinkButton action)
+        {
+            counter.Left = title.Right + 8;
+            action.Left = head.Width - 16 - action.Width;
         }
 
         // ---- behavior ---------------------------------------------------
@@ -1056,8 +1235,45 @@ namespace JianFanConverter
         {
             _s2t = _seg.SelectedIndex == 0;
             _lblPlaceholder.Text = _s2t ? "在此输入或粘贴简体中文…" : "在此输入或粘贴繁体中文…";
+            Reconvert();
+        }
+
+        private void OnVariantChanged(object sender, EventArgs e)
+        {
+            _variant = (ChineseVariant)_regionSeg.SelectedIndex;
+            UpdatePhrasesEnabled();
+            Reconvert();
+        }
+
+        private void OnPhrasesChanged(object sender, EventArgs e)
+        {
+            _localPhrases = _chkPhrases.Checked;
+            Reconvert();
+        }
+
+        private void UpdatePhrasesEnabled()
+        {
+            _chkPhrases.Enabled = _variant != ChineseVariant.Standard;
+        }
+
+        private void Reconvert()
+        {
             _debounce.Stop();
             StartConversion();
+        }
+
+        private static string ProfileName(bool s2t, ChineseVariant variant, bool phrases)
+        {
+            string direction = s2t ? "简→繁" : "繁→简";
+            string region;
+            switch (variant)
+            {
+                case ChineseVariant.Taiwan: region = "台湾"; break;
+                case ChineseVariant.HongKong: region = "香港"; break;
+                default: region = "标准"; break;
+            }
+            if (variant != ChineseVariant.Standard && phrases) region += "·用词";
+            return direction + " " + region;
         }
 
         private void StartConversion()
@@ -1072,6 +1288,8 @@ namespace JianFanConverter
             }
             int ver = ++_version;
             bool s2t = _s2t;
+            ChineseVariant variant = _variant;
+            bool phrases = _localPhrases;
             Stopwatch sw = Stopwatch.StartNew();
             Task.Factory.StartNew(delegate
             {
@@ -1079,7 +1297,7 @@ namespace JianFanConverter
                 Exception error = null;
                 try
                 {
-                    result = OpenCCEngine.Convert(input, s2t);
+                    result = OpenCCEngine.Convert(input, s2t, variant, phrases);
                 }
                 catch (Exception ex)
                 {
@@ -1098,7 +1316,7 @@ namespace JianFanConverter
                             return;
                         }
                         _txtOutput.Text = result;
-                        _lblStatus.Text = "已转换 · " + ms + " ms";
+                        _lblStatus.Text = "已转换 · " + ms + " ms · " + ProfileName(s2t, variant, phrases);
                     });
                 }
                 catch (ObjectDisposedException)

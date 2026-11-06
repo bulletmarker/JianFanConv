@@ -27,8 +27,8 @@ OpenCC 引擎与词典在**编译期内嵌进 exe**，`dist\` 只有一个可执
 ```
 JianFanConv/
 ├── .github/workflows/        定时把 Gitee 镜像到 GitHub 的工作流
-├── src/Program.cs            唯一源码（约 1150 行）
-├── vendor/opencc/            内置 OpenCC 引擎+词库+许可（构建期素材；编译时嵌入 exe）
+├── src/Program.cs            唯一源码（约 1360 行）
+├── vendor/opencc/            内置 OpenCC 引擎 + 标准/台湾/香港配置与词库 + 许可（构建期素材；编译时嵌入 exe）
 ├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）├── release.ps1               一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
 ├── tools/screenshot.ps1      重新生成 README 截图（PrintWindow 渲染，不读桌面）
 ├── dist/                     构建产物（已 gitignore；只有 JianFanConverter.exe）
@@ -49,6 +49,8 @@ JianFanConv/
 | 改内嵌运行时的释放 / 缓存 | `RuntimeAssets` | 资源名、缓存目录、`RuntimeTag` |
 | 改转换逻辑 / 引擎 | `OpenCC` / `OpenCCEngine` | P/Invoke 包装 + 实例缓存 |
 | 改方向切换 | `OnDirectionChanged` | `_s2t` 布尔控制方向 |
+| 改繁体地区 / 用词 | `MainForm._variant` / `_localPhrases` | 标准 / 台湾 / 香港 × 地区用词 |
+| 改方案映射 | `OpenCCEngine.ResolveConfig` | 方向 × 地区 × 用词 → 配置文件名（唯一判断处） |
 | 改实时转换 | `StartConversion` | 200 ms 防抖 + 后台线程 + 版本号 |
 | 改滚动条 | `AutoScrollTextBox` | 不满一屏隐藏，超出显示 |
 | 改构建 / 打包 | `build.ps1` | 只从 `vendor/` 取素材并以 `/resource` 内嵌 |
@@ -63,15 +65,17 @@ JianFanConv/
 | `Program.Main` | method | Program.cs:24 | DPI、异常处理、释放运行时、`Application.Run` |
 | `RuntimeAssets` | static class | Program.cs:114 | 内嵌资源提取到缓存目录 + 完整性校验 |
 | `OpenCC` | class | Program.cs:254 | `opencc.dll` P/Invoke 包装，单实例 |
-| `OpenCCEngine` | static class | Program.cs:357 | 运行时目录 + s2t/t2s 懒加载缓存 + 全局锁 |
-| `Theme` | static class | Program.cs:407 | 颜色/字体常量 + 圆角路径 |
-| `HeaderPanel` / `RoundedCard` | control | Program.cs:449 / :466 | 头部与卡片容器 |
-| `SegmentedControl` | control | Program.cs:490 | `简 → 繁` / `繁 → 简` 分段开关 |
-| `FlatButton` / `LinkButton` | control | Program.cs:620 / :657 | 自绘按钮 |
-| `AutoScrollTextBox` | control | Program.cs:699 | 自适应滚动条 |
-| `MainForm` | class | Program.cs:758 | 窗口、布局、事件 |
-| `BuildUi` | method | Program.cs:794 | 全部控件构造与布局 |
-| `OnDirectionChanged` / `StartConversion` | method | Program.cs:1055 / :1063 | 方向切换 / 防抖后转换并回写 UI |
+| `ChineseVariant` | enum | Program.cs:367 | 标准 / 台湾 / 香港 |
+| `OpenCCEngine` | static class | Program.cs:374 | 运行时目录 + 方案映射 + 实例懒加载缓存 + 全局锁 |
+| `Theme` | static class | Program.cs:435 | 颜色/字体常量 + 圆角路径 |
+| `HeaderPanel` / `RoundedCard` | control | Program.cs:477 / :494 | 头部与卡片容器 |
+| `SegmentedControl` | control | Program.cs | 通用 N 段开关（方向、地区） |
+| `FlatButton` / `LinkButton` | control | Program.cs | 自绘按钮 |
+| `FlatCheckBox` | control | Program.cs | 自绘「地区用词」开关 |
+| `AutoScrollTextBox` | control | Program.cs:878 | 自适应滚动条 |
+| `MainForm` | class | Program.cs:937 | 窗口、布局、事件 |
+| `BuildUi` | method | Program.cs:986 | 全部控件构造与布局 |
+| `OnDirectionChanged` / `StartConversion` | method | Program.cs:1234 / :1279 | 方向切换 / 防抖后转换并回写 UI |
 
 行号会随改动漂移；优先按符号名 grep，不要死信行号。
 
@@ -92,10 +96,12 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 
 `dist/` 不入库，新克隆的仓库没有 exe，必须先构建。无测试框架、无 CI。改完必须做的最小自检：
 
-1. 简→繁：`汉字转换测试，软件和硬件。` → `漢字轉換測試，軟件和硬件。`
-2. 繁→简：`漢字轉換測試，軟體和硬體。` → `汉字转换测试，软体和硬体。`
-3. `复制` 后剪贴板 = 右栏内容；`清空` 后两栏为空。
-4. 单文件分发：把 `dist\JianFanConverter.exe` **单独**拷到空目录运行，确认能转换（不是只在仓库里能跑）。
+1. 默认（台湾 + 地区用词）：`汉字转换测试，软件和硬件。` → `漢字轉換測試，軟體和硬體。`
+2. 切「标准」：同一输入 → `漢字轉換測試，軟件和硬件。`
+3. 切「香港」（地区用词开）：`软件和硬盘，鼠标，打印机。` → `軟件和硬碟，滑鼠，打印機。`
+4. 繁→简（台湾 + 地区用词）：`漢字轉換測試，軟體和硬體。` → `汉字转换测试，软件和硬件。`
+5. `复制` 后剪贴板 = 右栏内容；`清空` 后两栏为空。
+6. 单文件分发：把 `dist\JianFanConverter.exe` **单独**拷到空目录运行，确认能转换（不是只在仓库里能跑）。
 
 ## CONVENTIONS (deviations only)
 
@@ -103,7 +109,8 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - **No project files**：无 `.csproj` / `.sln` / designer / NuGet；源码单文件，UI 全手写。不要引入 WPF / Electron / HTML。
 - **Source encoding**：`.cs` 为 UTF-8，中文界面字符串直接写；编译参数含 `/codepage:65001`。
 - **build.ps1 保持 ASCII**：图标里的「简」用 `[char]0x7B80` 生成；不要加入中文字面量（PowerShell 5.1 无 BOM 会乱码）。
-- **原生互操作**：`opencc_open_w` 传绝对宽字符路径；`SetDllDirectory(<释放目录>)` 必须在**任何** `opencc` DllImport 之前执行；每个方向缓存一个实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
+- **原生互操作**：`opencc_open_w` 传绝对宽字符路径；`SetDllDirectory(<释放目录>)` 必须在**任何** `opencc` DllImport 之前执行；按转换方案缓存实例，调用必须持锁（C API 非线程安全）；退出时 `opencc_close`。
+- **方案映射集中**：方向 / 地区 / 用词 → 配置文件名只在 `OpenCCEngine.ResolveConfig` 判断，UI 事件只存 `_variant` / `_localPhrases`，不要各自拼配置名。
 - **素材流向单一**：`vendor/opencc/` → 编译期 `/resource:...,JianFanConverter.Runtime.<文件名>` → 运行时释放到缓存；`dist/` 只有 exe，是生成物。
 - **许可随包分发**：发布 zip 必须包含 `LICENSE.txt`（MIT）与 `THIRD-PARTY-NOTICES.txt`（Apache-2.0 全文 + OpenCC NOTICE）。Apache-2.0 §4 与 MIT 都要求声明随二进制分发；`release.ps1` 打包时自动生成，`dist/` 仍只放 exe。
 - **UI 文案中文**：沿用 OpenCC 术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
@@ -116,6 +123,8 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - 禁止把运行时资产改回“与 exe 同目录”的分发方式；那会退回到多文件分发，破坏单文件 exe 的唯一价值。
 - 禁止在 `SetDllDirectory` 之前触发任何 `opencc` DllImport（DllImport 一旦发生，DLL 搜索路径就锁定，之后改目录无效）。
 - 禁止改了 `vendor/opencc/` 内容却不 bump `RuntimeAssets.RuntimeTag`（缓存目录名不变会继续命中旧文件）。
+- 禁止新增 / 替换 vendor 词典后不同步 `build.ps1` 的 `$runtime` 与 `RuntimeAssets.FileNames`（漏一个就会在启动时弹「内置运行时文件无法使用」）。
+- 禁止把 OpenCC 1.4.2 上游的 `s2t.json` / `t2s.json` / `t2tw.json` / `t2hk.json` 直接拷进来：它们没有 `segmentation` 段，内置 `opencc.dll` 会报 `Required property not found: segmentation`；标准方向继续用现有的单分段配置。
 - 禁止删除/清理其它 `runtime-*` 缓存目录（可能正被另一个运行中的实例加载）。
 - 禁止引入 GPL 代码；本仓库只允许 MIT 应用代码 + Apache-2.0 的 OpenCC 资产，`vendor/opencc/LICENSE` 与 `NOTICE.txt` 必须保留。
 - 禁止手改 `dist/`（每次构建会清空）；禁止把源码或构建产物提交进仓库。
@@ -127,10 +136,15 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 
 - 构建环境默认**没有 .NET SDK**（`dotnet --list-sdks` 为空），只有 .NET Framework 4.8 运行时 + 自带 csc；只能用 `build.ps1`。
 - 仅 Win10/11 **x64**；`opencc.dll` 是 x64。
-- 首次运行把 7 个运行时文件释放到 `%LOCALAPPDATA%\JianFanConv\runtime-<tag>\`（该目录不可写时退到 `%TEMP%\JianFanConv\runtime-<tag>\`）。验证冷启动前必须先删掉它，否则测的是热启动。
+- 首次运行把 30 个运行时文件释放到 `%LOCALAPPDATA%\JianFanConv\runtime-<tag>\`（该目录不可写时退到 `%TEMP%\JianFanConv\runtime-<tag>\`）。验证冷启动前必须先删掉它，否则测的是热启动。
 - 已存在且长度与内嵌资源一致的文件不会重写；长度不符会重新释放。旧 tag 目录不清理。
-- OpenCC 标准 t2s 会把 `軟體` 转成 `软体`（不是 `软件`）；不要用“更自然”的期望值改自检。
-- UI 自动化（实测有效）：`WM_SETTEXT` 能设文本且可 `WM_GETTEXT` 回读校验，但**不触发 `TextChanged`**；要触发转换就向文本为 `方向切换` 的 HWND 发 `WM_KEYDOWN`（`VK_RIGHT`=0x27 / `VK_LEFT`=0x25），走 `OnDirectionChanged → StartConversion`。
+- OpenCC 标准 t2s 会把 `軟體` 转成 `软体`（不是 `软件`）；不要用“更自然”的期望值改自检。台湾 + 用词模式才会回到 `软件`。
+- 内置 `opencc.dll`（ConvertZZ 附带的旧版）与 OpenCC 1.4.2 的 `.ocd2` 词典实测兼容，但每个 config 必须带 `segmentation` 段；1.4.2 的 `s2t` / `t2s` / `t2tw` / `t2hk` 没有该段，直接使用会打开失败。
+- 字形与用词是两套能力：`s2tw` 只转台湾字形（软件→軟件），`s2twp` 才转台湾用词（软件→軟體）；香港同理 `s2hk` vs `s2hkp`。
+- 默认地区是台湾且「地区用词」默认开启；改默认值必须同步更新上面的自检期望。
+- UI 自动化（实测有效）：`WM_SETTEXT` 能设文本且可 `WM_GETTEXT` 回读校验，但**不触发 `TextChanged`**；要触发转换就向文本为 `方向切换` 或 `繁体地区` 的 HWND 发 `WM_KEYDOWN`（`VK_RIGHT`=0x27 / `VK_LEFT`=0x25），走 `SelectionChanged → StartConversion`；`地区用词` 复选框发 `VK_SPACE`（0x20）切换。控件用 `WM_GETTEXT` 按 Text 定位（方向切换 / 繁体地区 / 地区用词）。
+- PowerShell 5.1 的 `.ps1` 若含中文必须存成 **UTF-8 with BOM**；无 BOM 会按 ANSI 解析导致语法错误。仓库内 `.ps1` 一律 ASCII-only 就是为了避开它。
+- PowerShell 脚本里不要用 `$input` / `$output` 作变量名（`$input` 是自动变量，函数内会被管道枚举器覆盖）。
 - UI 自动化（坐标陷阱）：`WM_LBUTTONDOWN/UP` 的 lParam 必须是 **client 相对坐标**；`GetWindowRect` 给的是屏幕坐标，直接当 client 坐标用会越界，`SegmentedControl.HitSegment` 返回 -1，点击静默失效。
 - 控件枚举：`EnumChildWindows` 本身就会递归枚举全部后代；再手动递归会重复计数（表现为 EDIT 控件数量翻倍）。按 HWND 去重。
 - 截图需 DPI 感知 + `DWMWA_EXTENDED_FRAME_BOUNDS`，否则边缘会带入其它窗口内容。
@@ -171,5 +185,5 @@ powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.2
 ## NOTES
 
 - 应用不读取/保存用户配置；唯一的落盘是 `%LOCALAPPDATA%\JianFanConv\runtime-<tag>\` 运行时缓存，可以随时删除，下次启动自动重建。
-- 授权：应用代码采用 MIT（根目录 `LICENSE`）；OpenCC 引擎与词典为 Apache-2.0（见 `vendor/opencc/LICENSE`），随程序内嵌分发。
+- 授权：应用代码采用 MIT（根目录 `LICENSE`）；OpenCC 引擎与词典为 Apache-2.0（见 `vendor/opencc/LICENSE`），随程序内嵌分发。DLL 来自 ConvertZZ 的 OpenCC 发行版，配置与词典来自 OpenCC 1.4.2。
 - `README.md` 面向使用者；本文件面向改代码的 agent / 维护者。

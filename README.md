@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md)
 
-一个本地离线的简体 ↔ 繁体中文转换小工具。左侧粘贴/输入原文，右侧实时显示转换结果，基于 OpenCC 引擎，全程本地运行，无任何网络请求。
+一个本地离线的简体 ↔ 繁体中文转换小工具。左侧粘贴/输入原文，右侧实时显示转换结果，支持 OpenCC 标准、台湾正体、香港繁体及地区用词转换，基于 OpenCC 引擎，全程本地运行，无任何网络请求。
 
 ![简繁转换界面](docs/screenshot.png)
 
@@ -22,6 +22,7 @@
 ## 功能
 
 - 双向转换：`简 → 繁`、`繁 → 简`，点击顶部分段开关切换
+- 繁体目标可选：`标准`、`台湾`、`香港`；可再开启「地区用词」做本地化用词转换（台湾：软件 → 軟體；香港：打印机 → 打印機）
 - 左侧输入实时转换（200 ms 防抖），右侧结果可编辑、可部分复制
 - `粘贴`：用剪贴板文本替换左侧内容；`复制`：复制右侧结果；`清空`：清空两侧
 - 实时字数统计、转换耗时状态提示
@@ -40,9 +41,9 @@ THIRD-PARTY-NOTICES.txt  OpenCC 的 Apache-2.0 许可与来源说明
 
 后两个是许可证要求的伴随声明，删掉不影响运行，但重新分发时应随包保留。从源码构建的话，直接运行 `dist\JianFanConverter.exe`。
 
-要求：Windows 10/11 **x64**，.NET Framework 4.8 运行时（Win10/11 自带）。运行时只需要那一个 exe：`opencc.dll`、`s2t.json`、`t2s.json` 及 4 个 `.ocd2` 词典文件已经在编译时内嵌进程序里，**不需要**放在 exe 旁边。
+要求：Windows 10/11 **x64**，.NET Framework 4.8 运行时（Win10/11 自带）。运行时只需要那一个 exe：`opencc.dll`、10 个转换配置（标准 / 台湾 / 香港 / 地区用词）与 19 个 `.ocd2` 词典文件已经在编译时内嵌进程序里，**不需要**放在 exe 旁边。
 
-首次运行时程序会把内置的 OpenCC 运行时释放到 `%LOCALAPPDATA%\JianFanConv\runtime-r1\`（该目录不可写时退到 `%TEMP%\JianFanConv\runtime-r1\`），之后的启动直接复用已释放的文件。若释放失败或文件不可用，程序会用中文弹窗说明原因。
+首次运行时程序会把内置的 OpenCC 运行时释放到 `%LOCALAPPDATA%\JianFanConv\runtime-r2\`（该目录不可写时退到 `%TEMP%\JianFanConv\runtime-r2\`），之后的启动直接复用已释放的文件。若释放失败或文件不可用，程序会用中文弹窗说明原因。
 
 > 从仓库克隆的代码不包含 `dist\`（构建产物不入库），请先按下一节构建。
 
@@ -62,7 +63,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ## 修改指南
 
-源码只有一个文件 `src\Program.cs`（约 1130 行），按顺序分成四块：
+源码只有一个文件 `src\Program.cs`（约 1360 行），按顺序分成四块：
 
 | 区域 | 内容 |
 | --- | --- |
@@ -74,6 +75,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 常见修改点：
 
 - **转换方向**：`MainForm._s2t`（`true` = 简→繁）
+- **繁体地区**：`MainForm._variant`（默认 `ChineseVariant.Taiwan`）；「地区用词」由 `_localPhrases` 控制
+- **方案映射**：`OpenCCEngine.ResolveConfig`（方向 × 地区 × 用词 → 配置文件名）
 - **实时转换延迟**：`_debounce.Interval`（默认 200 ms）
 - **配色 / 字号**：`Theme` 类
 - **窗口默认大小**：`MainForm` 构造函数里的 `ClientSize`
@@ -95,28 +98,31 @@ JianFanConv\
 ├── vendor\
 │   └── opencc\                  项目自带的 OpenCC 引擎（构建期素材，编译时嵌入 exe）
 │       ├── opencc.dll           OpenCC C API 原生库（Windows x64）
-│       ├── s2t.json / t2s.json  转换配置
-│       ├── STPhrases.ocd2 / STCharacters.ocd2
-│       ├── TSPhrases.ocd2 / TSCharacters.ocd2
+│       ├── s2t / t2s.json       OpenCC 标准简繁配置
+│       ├── s2tw / tw2s.json     台湾正体
+│       ├── s2twp / tw2sp.json   台湾正体 + 地区用词
+│       ├── s2hk / hk2s.json     香港繁体
+│       ├── s2hkp / hk2sp.json   香港繁体 + 地区用词
+│       ├── *.ocd2               19 个字形 / 词组词典
 │       ├── LICENSE              Apache License 2.0
 │       └── NOTICE.txt           来源与授权说明
 └── dist\                        编译产物，不入库（可直接分发）
-    └── JianFanConverter.exe     x64 主程序（唯一文件，7 个运行时资产已内嵌）
+    └── JianFanConverter.exe     x64 主程序（唯一文件，30 个运行时资产已内嵌）
 ```
 
 发行版 zip 在 exe 之外还会附带 `LICENSE.txt` 与 `THIRD-PARTY-NOTICES.txt`，由 `release.ps1` 打包时生成——Apache-2.0 与 MIT 都要求许可声明随二进制一同分发。`dist\` 本身保持只有 exe。
 
 ## 技术说明
 
-- 通过 P/Invoke 调用 `opencc.dll`（`opencc_open_w` / `opencc_convert_utf8` / `opencc_convert_utf8_free` 等），每个方向缓存一个 OpenCC 实例并加锁（C API 非线程安全），退出时释放句柄
-- 启动时把内嵌的 7 个 OpenCC 运行时资产释放到 `%LOCALAPPDATA%\JianFanConv\runtime-r1\`（不可写时退到 `%TEMP%`），随后调用 `SetDllDirectory(缓存目录)` 保证原生 DLL 从缓存目录解析；配置用绝对路径传给 `opencc_open_w`，因此 exe 和程序工作目录都可以任意放置
+- 通过 P/Invoke 调用 `opencc.dll`（`opencc_open_w` / `opencc_convert_utf8` / `opencc_convert_utf8_free` 等），按转换方案（方向 × 地区 × 用词）懒加载并缓存 OpenCC 实例，每次调用加锁（C API 非线程安全），退出时释放句柄
+- 启动时把内嵌的 30 个 OpenCC 运行时资产释放到 `%LOCALAPPDATA%\JianFanConv\runtime-r2\`（不可写时退到 `%TEMP%`），随后调用 `SetDllDirectory(缓存目录)` 保证原生 DLL 从缓存目录解析；配置用绝对路径传给 `opencc_open_w`，因此 exe 和程序工作目录都可以任意放置
 - 缓存按 `runtime-<tag>` 命名：只用已存在且长度与内嵌资源一致的文件，缺失或长度不符才重新释放；旧 tag 目录不清理（可能是另一个仍在运行的实例）
 - 转换在后台线程执行，防抖 + 版本号丢弃过期结果，界面不卡顿
 - 未处理异常会写入 `%TEMP%\JianFanConverter-error.log` 并弹窗提示
 
 ## 版权与致谢
 
-- 转换引擎 [OpenCC](https://github.com/BYVoid/OpenCC)（`opencc.dll` 及词典）采用 **Apache License 2.0**，许可原文见 `vendor\opencc\LICENSE`，来源说明见 `NOTICE.txt`。这些文件随本程序一并分发。
+- 转换引擎 [OpenCC](https://github.com/BYVoid/OpenCC)（`opencc.dll` 及词典）采用 **Apache License 2.0**，许可原文见 `vendor\opencc\LICENSE`，来源说明见 `NOTICE.txt`。引擎 DLL 来自 ConvertZZ 附带的 OpenCC 发行版，配置与词典来自 OpenCC 1.4.2，这些文件随本程序一并分发。
 - 本程序的界面与互操作代码为原创实现，项目中不含任何 GPL 代码；OpenCC 资产按 Apache-2.0 分发。
 - 仅支持 win-x64。
 
