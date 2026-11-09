@@ -1,10 +1,10 @@
 # JianFanConverter
 
-A portable, fully offline Windows app for Simplified ↔ Traditional Chinese conversion, powered by [OpenCC](https://github.com/BYVoid/OpenCC).
+A portable, fully offline desktop app for Simplified ↔ Traditional Chinese conversion, powered by [OpenCC](https://github.com/BYVoid/OpenCC). Native Windows (WinForms) and macOS (SwiftUI) builds.
 
 [中文说明](README.md) | **English**
 
-- **Single file**: one `JianFanConverter.exe` (~1.5 MB). No installer, no DLLs to keep together.
+- **Single file (Windows)**: one `JianFanConverter.exe` (~1.5 MB). No installer, no DLLs to keep together.
 - **Fully offline**: OpenCC is embedded into the exe at compile time. The app makes no network requests.
 - **No config, no leftovers**: nothing is written to the registry; the only disk write is a runtime cache you can delete at any time.
 
@@ -59,10 +59,22 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 Run `tools\smoke.ps1` for the automated UI smoke test (build, cold start, every conversion mode, copy/clear). It briefly brings the window forward and moves the mouse; add `-SkipInteractive` on sessions without a real desktop.
 
+### macOS (in development)
+
+The macOS port is a native SwiftUI app with OpenCC 1.4.2 statically linked. Build it **on a Mac only**:
+
+```bash
+bash src/macos/scripts/build-opencc.sh   # once: build the universal OpenCC static library
+bash src/macos/scripts/build-app.sh      # build dist-macos/JianFanConverter.app
+bash src/macos/scripts/test-engine.sh    # engine-level conversion vectors
+```
+
+Requires macOS 14+. The app is ad-hoc signed and not notarized; on first launch use right-click → Open, or run `xattr -dr com.apple.quarantine JianFanConverter.app`.
+
 ## License
 
 - Application code: [MIT](LICENSE)
 - OpenCC engine and dictionaries (`opencc.dll` and the `.ocd2` files): Apache License 2.0 — see `vendor/opencc/LICENSE` and `vendor/opencc/NOTICE.txt`
-- Windows x64 only
+- Windows x64; macOS 14+ universal (arm64 + x86_64)
 
 For full details, see the [Chinese README](README.md).

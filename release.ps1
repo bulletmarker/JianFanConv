@@ -314,3 +314,6 @@ Write-Host ('version : ' + $tag)
 Write-Host ('commit  : ' + $head)
 Write-Host ('exe     : ' + $exeHash)
 Write-Host ('zip     : ' + $zipHash + '  (' + $zipKb + ' KB)')
+Write-Host ''
+Write-Host 'macOS   : run src/macos/scripts/release-macos.sh --version <ver> on the Mac'
+Write-Host '          to build the universal .app and attach the macOS zip.'

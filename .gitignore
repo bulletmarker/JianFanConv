@@ -13,3 +13,11 @@ Thumbs.db
 # transient release artifacts (built by build.ps1, attached to the Gitee release)
 JianFanConverter-v*.zip
 release-notes-v*.md
+
+# macOS build artifacts
+dist-macos/
+src/macos/build/
+src/macos/.build/
+.build/
+*.app/
+vendor/opencc-src/

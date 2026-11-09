@@ -5,9 +5,11 @@
 
 ## OVERVIEW
 
-Windows 本地简繁转换桌面工具。C# 5 + WinForms（.NET Framework 4.8 / x64），左栏输入、右栏实时输出，完全离线，不依赖任何外部安装或本地项目。
+Windows 与 macOS 双平台的本地简繁转换桌面工具。Windows 版为 C# 5 + WinForms（.NET Framework 4.8 / x64）；macOS 版为 SwiftUI + 静态链入的 OpenCC 1.4.2（macOS 14+ / universal）。两端都是左栏输入、右栏实时输出，完全离线，不依赖任何外部安装或本地项目。
 
-OpenCC 引擎与词典在**编译期内嵌进 exe**，`dist\` 只有一个可执行文件；首次运行把它释放到用户缓存目录再加载，因此分发不需要任何附带文件。
+Windows：OpenCC 引擎与词典在**编译期内嵌进 exe**，`dist\` 只有一个可执行文件；首次运行把它释放到用户缓存目录再加载，因此分发不需要任何附带文件。
+
+macOS：引擎**静态链入主程序**，配置与词典放在 `.app/Contents/Resources/opencc/`；`dist-macos\` 产出通用架构 `.app` 与 zip，无运行时释放、无落盘缓存。
 
 本仓库以 **Gitee 为唯一真源**：`origin` 只推 Gitee；GitHub 由 `.github/workflows/sync-from-gitee.yml` 定时从 Gitee 镜像（国内网络直推 GitHub 不稳定，故本地不再推 GitHub）。远程地址以 `git remote -v` 为准。
 
@@ -22,19 +24,40 @@ OpenCC 引擎与词典在**编译期内嵌进 exe**，`dist\` 只有一个可执
 
 只记录项目结构、构建命令、语言 / 框架约束与通用坑位。
 
+## PLATFORM-SCOPED BUILD & TEST (MANDATORY)
+
+本仓库有 Windows 与 macOS 两套产物，**只能在各自的宿主系统上构建、打包和验证**。跨宿主「看起来跑通了」不算验证。
+
+- **宿主是 Windows 时**：只允许运行 `build.ps1`、`dist\JianFanConverter.exe`、`tools\smoke.ps1`、PowerShell 脚本。不得执行 `swiftc` / `swift build` / `lipo` / `codesign` / `hdiutil` / `xcodebuild`，也不得声称 macOS 产物「已构建」「已验证」。
+- **宿主是 macOS 时**：只允许运行 `src/macos/scripts/*.sh`（`swiftc`、`lipo`、`codesign`、`ditto`、`hdiutil`）。不得执行 `build.ps1` / `csc.exe` / `tools\smoke.ps1`，也不得用 Wine / CrossOver 的结果冒充 Windows 原生验证。
+- **自检必须宿主匹配**：改 Windows 代码 → 在 Windows 上 `build.ps1` + 最小自检；改 macOS 代码 → 在 Mac 上 `build-app.sh` + 最小自检；两端都改 → 分别在两台机器上验证。
+- **无法本机验证时如实标注**：跨平台改动要在提交说明 / 回复里写清「哪一半已在哪个宿主验证、哪一半未验证」，禁止用静态阅读代替构建结论。
+- macOS 的 `.app` 启动、转换结果、复制/清空、`lipo -info`、Gatekeeper 行为**只能由 Mac 侧执行**；Windows 侧最多做静态检查（文件清单、脚本语法、路径引用）。
+
 ## STRUCTURE
 
 ```
 JianFanConv/
 ├── .github/workflows/        定时把 Gitee 镜像到 GitHub 的工作流
-├── src/Program.cs            唯一源码（约 1360 行）
-├── vendor/opencc/            内置 OpenCC 引擎 + 标准/台湾/香港配置与词库 + 许可（构建期素材；编译时嵌入 exe）
-├── build.ps1                 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）├── release.ps1               一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
-├── tools/screenshot.ps1      重新生成 README 截图（PrintWindow 渲染，不读桌面）
-├── tools/smoke.ps1           UI 冒烟（构建 + 冷启动 + 全部转换模式 + 复制/清空）
-├── dist/                     构建产物（已 gitignore；只有 JianFanConverter.exe）
-├── .gitignore                忽略 dist/、运行时缓存与发布临时文件
-├── docs/screenshot.png       README 用的界面截图（客户区，无标题栏）
+├── src/
+│   ├── windows/Program.cs    Windows 版唯一源码（C# 5 + WinForms，约 1360 行）
+│   └── macos/                macOS 版（SwiftUI + 直接 swiftc 构建，无 Xcode 工程）
+│       ├── Sources/COpenCC/      OpenCC C API 头文件与桥接头
+│       ├── Sources/JianFanConv/  App / Theme / View / Editor / Engine
+│       ├── Tests/EngineSmoke/    引擎级转换向量自检（无 GUI）
+│       ├── Resources/AppIcon.png 1024px 图标源图（脚本生成 .icns）
+│       ├── scripts/              build-opencc.sh / build-app.sh / smoke.sh / test-engine.sh / release-macos.sh
+│       └── Info.plist            .app 元数据模板
+├── vendor/opencc/            OpenCC 配置与词库 + Windows DLL（两端共用）
+│   └── macos/libopencc.a     macOS universal 静态库（构建期素材；见 BUILD.md）
+├── build.ps1                 Windows 一键构建（清空 dist → 校验并内嵌 vendor 素材 → 编译）
+├── release.ps1               Windows 一键发版（构建/打包/推 Gitee/建双平台 release，ASCII-only）
+├── tools/screenshot.ps1      Windows 截图（PrintWindow 渲染，不读桌面）
+├── tools/smoke.ps1           Windows UI 冒烟（构建 + 冷启动 + 全部转换模式 + 复制/清空）
+├── dist/                     Windows 构建产物（已 gitignore；只有 JianFanConverter.exe）
+├── dist-macos/               macOS 构建产物（已 gitignore；.app 与 zip）
+├── .gitignore                忽略构建产物、运行时缓存与发布临时文件
+├── docs/screenshot.png       README 用的 Windows 界面截图
 ├── LICENSE                   应用代码 MIT 许可
 ├── AGENTS.md                 维护者 / agent 约定（本文件）
 ├── README.md                 面向使用者的运行 / 构建 / 修改说明（中文，主文档）
@@ -59,25 +82,30 @@ JianFanConv/
 | 发版 | 本文「发布流程」 | 构建 → 压缩 → 打 tag → 推 Gitee（GitHub 自动镜像） |
 | 重新生成 README 截图 | `tools/screenshot.ps1` | 改过 UI 后跑一次；`PrintWindow` 渲染客户区 |
 | 跑 UI 冒烟 | `tools/smoke.ps1` | 构建 → 冷启动 → 全部转换模式 + 复制/清空；`-SkipBuild` / `-SkipInteractive` |
+| 改 macOS 界面 / 布局 | `src/macos/Sources/JianFanConv/View/MainView.swift` | SwiftUI，配色 / 间距对齐 Windows 版 |
+| 改 macOS 编辑器 | `src/macos/Sources/JianFanConv/Editor/CodeEditor.swift` | `NSTextView` 桥接；关闭智能引号 / 自动替换，处理输入法 marked text |
+| 改 macOS 转换逻辑 | `src/macos/Sources/JianFanConv/Engine/OpenCCEngine.swift` | 映射必须与 Windows `ResolveConfig` 完全一致 |
+| 改 macOS 构建 / 打包 | `src/macos/scripts/build-app.sh` | 双架构 `swiftc` → `lipo` → 组装 `.app` → ad-hoc 签名 |
+| 重建 macOS 引擎库 | `src/macos/scripts/build-opencc.sh` | 只能在 Mac 上跑；产物 `vendor/opencc/macos/libopencc.a` 入库 |
 
 ## CODE MAP
 
 | Symbol | Type | Location | Role |
 |---|---|---|---|
-| `Program.Main` | method | Program.cs:24 | DPI、异常处理、释放运行时、`Application.Run` |
-| `RuntimeAssets` | static class | Program.cs:114 | 内嵌资源提取到缓存目录 + 完整性校验 |
-| `OpenCC` | class | Program.cs:254 | `opencc.dll` P/Invoke 包装，单实例 |
-| `ChineseVariant` | enum | Program.cs:367 | 标准 / 台湾 / 香港 |
-| `OpenCCEngine` | static class | Program.cs:374 | 运行时目录 + 方案映射 + 实例懒加载缓存 + 全局锁 |
-| `Theme` | static class | Program.cs:435 | 颜色/字体常量 + 圆角路径 |
-| `HeaderPanel` / `RoundedCard` | control | Program.cs:477 / :494 | 头部与卡片容器 |
+| `Program.Main` | method | src/windows/Program.cs:24 | DPI、异常处理、释放运行时、`Application.Run` |
+| `RuntimeAssets` | static class | src/windows/Program.cs:114 | 内嵌资源提取到缓存目录 + 完整性校验 |
+| `OpenCC` | class | src/windows/Program.cs:254 | `opencc.dll` P/Invoke 包装，单实例 |
+| `ChineseVariant` | enum | src/windows/Program.cs:367 | 标准 / 台湾 / 香港 |
+| `OpenCCEngine` | static class | src/windows/Program.cs:374 | 运行时目录 + 方案映射 + 实例懒加载缓存 + 全局锁 |
+| `Theme` | static class | src/windows/Program.cs:435 | 颜色/字体常量 + 圆角路径 |
+| `HeaderPanel` / `RoundedCard` | control | src/windows/Program.cs:477 / :494 | 头部与卡片容器 |
 | `SegmentedControl` | control | Program.cs | 通用 N 段开关（方向、地区） |
 | `FlatButton` / `LinkButton` | control | Program.cs | 自绘按钮 |
 | `FlatCheckBox` | control | Program.cs | 自绘「地区用词」开关 |
-| `AutoScrollTextBox` | control | Program.cs:878 | 自适应滚动条 |
-| `MainForm` | class | Program.cs:937 | 窗口、布局、事件 |
-| `BuildUi` | method | Program.cs:986 | 全部控件构造与布局 |
-| `OnDirectionChanged` / `StartConversion` | method | Program.cs:1234 / :1279 | 方向切换 / 防抖后转换并回写 UI |
+| `AutoScrollTextBox` | control | src/windows/Program.cs:878 | 自适应滚动条 |
+| `MainForm` | class | src/windows/Program.cs:937 | 窗口、布局、事件 |
+| `BuildUi` | method | src/windows/Program.cs:986 | 全部控件构造与布局 |
+| `OnDirectionChanged` / `StartConversion` | method | src/windows/Program.cs:1234 / :1279 | 方向切换 / 防抖后转换并回写 UI |
 
 行号会随改动漂移；优先按符号名 grep，不要死信行号。
 
@@ -100,7 +128,26 @@ powershell -ExecutionPolicy Bypass -File tools\smoke.ps1 -SkipBuild -SkipInterac
 Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
-`dist/` 不入库，新克隆的仓库没有 exe，必须先构建。无单元测试框架、无 CI；`tools/smoke.ps1` 覆盖下面的 1–5 项。改完必须做的最小自检：
+macOS 侧命令（**只能在 Mac 上执行**，Windows 上不要尝试）：
+
+```bash
+# 一次性构建 universal OpenCC 静态库（需要 OpenCC 1.4.2 源码）
+bash src/macos/scripts/build-opencc.sh
+
+# 构建 .app（版本号默认取最新 tag，可用 --version 覆盖）
+bash src/macos/scripts/build-app.sh
+bash src/macos/scripts/build-app.sh --version 1.2.0
+
+# 运行与自检
+open dist-macos/JianFanConverter.app
+bash src/macos/scripts/smoke.sh
+bash src/macos/scripts/test-engine.sh
+
+# 模型 B 发版：先在 Windows 跑 release.ps1，再在 Mac 上把 mac zip 挂到同一发行版
+GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
+```
+
+`dist/` 与 `dist-macos/` 不入库，新克隆的仓库必须先在对应宿主上构建。Windows 侧无单元测试框架、无 CI，`tools/smoke.ps1` 覆盖下面的 1–5 项；macOS 侧有引擎级 `test-engine.sh` 与打包级 `smoke.sh`，GUI 仍需手工验收。改完必须做的最小自检：
 
 1. 默认（台湾 + 地区用词）：`汉字转换测试，软件和硬件。` → `漢字轉換測試，軟體和硬體。`
 2. 切「标准」：同一输入 → `漢字轉換測試，軟件和硬件。`
@@ -124,6 +171,10 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - **UI 文案中文**：沿用 OpenCC 术语（原文 / 结果 / 粘贴 / 复制 / 清空）。
 - **提交范围**：只提交 `src/`、`vendor/`、`.github/`、`tools/`、`build.ps1`、`release.ps1`、`README.md`、`README.en.md`、`AGENTS.md`、`LICENSE`；`dist/`、`*.zip`、`release-notes-*.md` 都不入库（已在 `.gitignore`）。
 - **英文文档**：`README.en.md` 是「摘要 + 链接」，不追求与中文版对等；只在功能增删或运行要求变化时同步，纯措辞调整不跟。`AGENTS.md` 不翻译。
+- **macOS 不用 SwiftPM / Xcode 工程**：`src/macos/scripts/build-app.sh` 用 `swiftc` 双架构编译 + `lipo` 直接组装 `.app`。不要引入 `Package.swift`、`.xcodeproj` 或第三方包。
+- **macOS 脚本 ASCII-only**：`src/macos/scripts/*.sh` 不写中文字面量；中文只出现在 `Info.plist` 的 `CFBundleDisplayName` 与 Swift UI 字符串。
+- **macOS 引擎静态链入**：`vendor/opencc/macos/libopencc.a` 已并入 marisa，`.app` 内不得出现 `.dylib`；`opencc.dll` 不得进入 mac 包。
+- **映射跨平台一致**：mac 的 `OpenCCEngine.resolveConfig` 必须与 Windows `OpenCCEngine.ResolveConfig` 逐条对应；改任一端必须同步另一端。
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -139,6 +190,9 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - 禁止删除 `opencc_convert_utf8_free` / `opencc_close`；禁止无锁调用转换。
 - 禁止为“顺手”引入 SDK、NuGet、网络请求、安装包或第二个源码文件。
 - 禁止假设 `dotnet build` 可用。
+- 禁止在 Windows 上声称 macOS 产物「已构建 / 已验证」，或在 Mac 上声称 Windows 产物「已构建 / 已验证」（见 PLATFORM-SCOPED 规则）。
+- 禁止把 `opencc.dll` 打进 macOS 包，禁止在 mac 端改回 dylib 多文件分发；OpenCC 必须是静态链入。
+- 禁止在 `src/macos/scripts/*.sh` 中写死 Homebrew 路径、本机绝对路径或中文。
 
 ## GOTCHAS
 
@@ -169,6 +223,13 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 - `--mirror` 只同步 git 引用（分支 / 标签 / 提交），**Gitee 的发行版与附件不会出现在 GitHub**。两边 release 要分别创建：Gitee 网页上传 zip，GitHub 侧用 `gh release create v<版本> JianFanConverter-v<版本>-win-x64.zip --notes-file ...`。
 - Gitee API 的响应头不带 `charset`，PowerShell 的 `Invoke-RestMethod` 会按 Latin-1 解码，`name` / `body` 全是乱码（`id` 和附件名是 ASCII，不受影响）。要校验 Gitee 返回的中文，用 `curl.exe` 落盘再以 UTF-8 解析，别用 `Invoke-RestMethod` 直接比较。
 - Gitee 创建发行版只接受 **form 编码**（JSON body 会返回 `405 Not Allowed`）；查询不存在的 tag 返回 **HTTP 200 + body `null`**（不是 404），所以判断「发行版是否已存在」要看 `id` 而不是状态码。
+- macOS 端 `opencc_open` 接收 `const char*`（UTF-8 绝对路径），**没有** `opencc_open_w`；`opencc_convert_utf8` 返回的缓冲区必须用 `opencc_convert_utf8_free` 释放。
+- macOS 端不需要运行时释放 / 缓存：OpenCC 配置与词典直接放在 `.app/Contents/Resources/opencc/`；开发期间可用 `JIANFAN_OPENCC_DIR` 覆盖目录。
+- `vendor/opencc/macos/libopencc.a` 是 universal 静态库（arm64 + x86_64），已并入 marisa；`.app` 内不应出现任何 `.dylib`。
+- Apple Silicon 拒绝运行未签名二进制：本地自用也必须 ad-hoc 签名（`codesign --sign -`）。
+- 未公证的 zip 下载后带 `com.apple.quarantine`：首次需右键 → 打开，或执行 `xattr -dr com.apple.quarantine JianFanConverter.app`。
+- macOS 输入框默认开启智能引号 / 自动替换，会篡改中文测试输入；`CodeEditor` 必须显式关闭，并在输入法 marked text 期间不回写绑定。
+- macOS 最低 14.0；`swiftc` 目标固定为 `arm64-apple-macos14.0` / `x86_64-apple-macos14.0`。
 - 默认分支 `master`；远程配置以 `git remote -v` 为准。
 
 ## 发布流程
@@ -191,8 +252,33 @@ powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.2
 - 发行版说明里写清 SHA256、环境要求（Win10/11 x64、.NET Framework 4.8）、SmartScreen 提示与许可声明。
 - zip 与说明文件都是发布临时物（已在 `.gitignore`），上传后删除。
 
+### 双平台发布（模型 B：各自构建、各自上传）
+
+Windows 与 macOS 的产物只能在各自宿主上构建，所以发布拆成两步，但只创建一次 tag 与发行版：
+
+1. **Windows（发版发起端）**：
+   `powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.2.0`
+   打 tag → 推 Gitee → 建 Gitee 发行版并上传 `JianFanConverter-v<版本>-win-x64.zip` → 触发 GitHub 镜像并建 GitHub release。
+2. **macOS（同一 tag、同一 commit）**：
+   ```bash
+   git fetch --tags
+   git checkout v1.2.0
+   GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
+   ```
+   构建 universal `.app` → 打 `JianFanConverter-v<版本>-macos-universal.zip` → 上传到**同一个** Gitee 发行版与 GitHub release。
+3. 检查两个平台的发行版都同时挂有 `-win-x64.zip` 与 `-macos-universal.zip`。mac zip 的 SHA256 由脚本打印，需要时补进发行版说明。
+
+约束：
+
+- 顺序固定为「先 Windows 后 Mac」：模型 B 依赖 Windows 先创建 tag / 发行版；`release-macos.sh` 找不到发行版会直接报错并提示。
+- 两端必须构建同一 commit：`release-macos.sh` 校验 `HEAD == v<版本>` 且工作区干净，不满足就退出。
+- Mac 侧只需要 `GITEE_TOKEN`、`python3`（随 CLT）与 `gh`；不需要 `release-notes-v*.md`（该文件不入库，Mac 上没有）。
+- 上传是幂等的：附件已存在时跳过，可安全重跑；GitHub 附件用 `gh release upload --clobber`。
+- 若 GitHub 镜像还没同步到该 tag，先等镜像任务完成或 `gh workflow run sync-from-gitee.yml --repo <slug>`，再重跑脚本。
+- 不存在「一台机器构建两端」的做法；不要为了省事在 Windows 上编 mac 包或在 Mac 上编 Windows 包。
+
 ## NOTES
 
-- 应用不读取/保存用户配置；唯一的落盘是 `%LOCALAPPDATA%\JianFanConv\runtime-<tag>\` 运行时缓存，可以随时删除，下次启动自动重建。
-- 授权：应用代码采用 MIT（根目录 `LICENSE`）；OpenCC 引擎与词典为 Apache-2.0（见 `vendor/opencc/LICENSE`），随程序内嵌分发。DLL 来自 ConvertZZ 的 OpenCC 发行版，配置与词典来自 OpenCC 1.4.2。
+- Windows 版不读取/保存用户配置；唯一的落盘是 `%LOCALAPPDATA%\JianFanConv\runtime-<tag>\` 运行时缓存，可以随时删除，下次启动自动重建。macOS 版不落盘：OpenCC 资源直接位于 `.app` 包内。
+- 授权：应用代码采用 MIT（根目录 `LICENSE`）；OpenCC 引擎与词典为 Apache-2.0（见 `vendor/opencc/LICENSE`），随程序内嵌分发。Windows 的 DLL 来自 ConvertZZ 的 OpenCC 发行版；macOS 的 `libopencc.a` 由 OpenCC 1.4.2 源码自建（静态、已并入 marisa），配置与词典两端共用 1.4.2 的同一套文件。
 - `README.md` 面向使用者；本文件面向改代码的 agent / 维护者。

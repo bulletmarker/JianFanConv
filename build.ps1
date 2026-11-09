@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root   = Split-Path -Parent $MyInvocation.MyCommand.Path
-$srcDir = Join-Path $root 'src'
+$srcDir = Join-Path (Join-Path $root 'src') 'windows'
 $src    = Join-Path $srcDir 'Program.cs'
 $dist   = Join-Path $root 'dist'
 $csc    = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'

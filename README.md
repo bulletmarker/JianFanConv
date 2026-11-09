@@ -13,7 +13,7 @@
 | 场景 | 依赖 |
 | --- | --- |
 | 运行 `dist\JianFanConverter.exe` | 只有这 **1 个 exe**；.NET Framework 4.8（Win10/11 自带）；win-x64 |
-| 重新构建 `build.ps1` | `src\Program.cs` + `vendor\opencc\` 内的引擎文件 + 系统自带 `csc.exe` |
+| 重新构建 `build.ps1` | `src\windows\Program.cs` + `vendor\opencc\` 内的引擎文件 + 系统自带 `csc.exe` |
 
 - 单个 `dist\JianFanConverter.exe` 可以直接拷到任意位置（或另一台 Win10/11 x64 电脑）运行，不需要附带其它文件。
 - `vendor\opencc\` 是项目自带的 OpenCC 引擎副本（`opencc.dll` + 词典 + 许可），`build.ps1` 只从这里读取并作为资源嵌入，**不读取任何外部安装目录，也不访问网络**。
@@ -61,6 +61,32 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 构建完成后 `dist\` 里只有 `JianFanConverter.exe` 一个文件。
 
+## macOS 版（开发中）
+
+macOS 版是原生 SwiftUI 应用：OpenCC 1.4.2 **静态链入主程序**，配置与词典放在 `.app/Contents/Resources/opencc/`，没有运行时释放、没有落盘缓存，产物是 arm64 + x86_64 通用 `.app`。
+
+构建（**只能在 Mac 上执行**）：
+
+```bash
+# 一次性：构建 universal OpenCC 静态库（需要 OpenCC 1.4.2 源码）
+bash src/macos/scripts/build-opencc.sh
+
+# 构建 .app；版本号默认取最新 tag，可用 --version 覆盖
+bash src/macos/scripts/build-app.sh
+bash src/macos/scripts/build-app.sh --version 1.2.0
+```
+
+产物：`dist-macos/JianFanConverter.app` 与 `dist-macos/JianFanConverter-v<版本>-macos-universal.zip`。
+
+要求 macOS 14+。应用为 ad-hoc 签名、未公证：首次打开需在 Finder 里右键 → 打开，或执行 `xattr -dr com.apple.quarantine JianFanConverter.app`。
+
+引擎级自检（不启动 GUI）：
+
+```bash
+bash src/macos/scripts/test-engine.sh
+bash src/macos/scripts/smoke.sh
+```
+
 ## 自检
 
 构建后可以跑 UI 冒烟脚本（自动构建、冷启动、切换全部转换模式，并验证复制/清空）：
@@ -73,7 +99,7 @@ powershell -ExecutionPolicy Bypass -File tools\smoke.ps1
 
 ## 修改指南
 
-源码只有一个文件 `src\Program.cs`（约 1360 行），按顺序分成四块：
+源码只有一个文件 `src\windows\Program.cs`（约 1360 行），按顺序分成四块：
 
 | 区域 | 内容 |
 | --- | --- |
@@ -107,7 +133,9 @@ JianFanConv\
 │   ├── screenshot.ps1           重新生成 README 截图
 │   └── smoke.ps1                UI 冒烟测试
 ├── src\
-│   └── Program.cs               全部源码（WinForms UI + OpenCC P/Invoke + 运行时释放）
+│   ├── windows\
+│   │   └── Program.cs           Windows 全部源码（WinForms UI + OpenCC P/Invoke + 运行时释放）
+│   └── macos\                   macOS 版（SwiftUI + 静态链入 OpenCC，无 Xcode 工程）
 ├── vendor\
 │   └── opencc\                  项目自带的 OpenCC 引擎（构建期素材，编译时嵌入 exe）
 │       ├── opencc.dll           OpenCC C API 原生库（Windows x64）
@@ -137,7 +165,7 @@ JianFanConv\
 
 - 转换引擎 [OpenCC](https://github.com/BYVoid/OpenCC)（`opencc.dll` 及词典）采用 **Apache License 2.0**，许可原文见 `vendor\opencc\LICENSE`，来源说明见 `NOTICE.txt`。引擎 DLL 来自 ConvertZZ 附带的 OpenCC 发行版，配置与词典来自 OpenCC 1.4.2，这些文件随本程序一并分发。
 - 本程序的界面与互操作代码为原创实现，项目中不含任何 GPL 代码；OpenCC 资产按 Apache-2.0 分发。
-- 仅支持 win-x64。
+- Windows 版仅支持 win-x64；macOS 版为 macOS 14+ 通用二进制（arm64 + x86_64），OpenCC 静态链入。
 
 ## 许可证
 
