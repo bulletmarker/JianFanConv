@@ -131,7 +131,11 @@ Remove-Item "$env:LOCALAPPDATA\JianFanConv" -Recurse -Force -ErrorAction Silentl
 macOS 侧命令（**只能在 Mac 上执行**，Windows 上不要尝试）：
 
 ```bash
-# 一次性构建 universal OpenCC 静态库（需要 OpenCC 1.4.2 源码）
+# 前置（只需一次）：xcode-select --install；cmake 需自行安装（brew install cmake）；gh 已登录
+# 取 OpenCC 1.4.2 源码（gitignored）
+git clone --branch ver.1.4.2 --depth 1 https://github.com/BYVoid/OpenCC.git vendor/opencc-src
+
+# 一次性构建 universal OpenCC 静态库
 bash src/macos/scripts/build-opencc.sh
 
 # 构建 .app（版本号默认取最新 tag，可用 --version 覆盖）

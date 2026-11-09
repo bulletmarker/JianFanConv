@@ -65,10 +65,12 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 macOS 版是原生 SwiftUI 应用：OpenCC 1.4.2 **静态链入主程序**，配置与词典放在 `.app/Contents/Resources/opencc/`，没有运行时释放、没有落盘缓存，产物是 arm64 + x86_64 通用 `.app`。
 
-构建（**只能在 Mac 上执行**）：
+构建（**只能在 Mac 上执行**）。前置：`xcode-select --install`、`brew install cmake`，并把 OpenCC 1.4.2 源码放到 `vendor/opencc-src/`（只需一次）：
 
 ```bash
-# 一次性：构建 universal OpenCC 静态库（需要 OpenCC 1.4.2 源码）
+git clone --branch ver.1.4.2 --depth 1 https://github.com/BYVoid/OpenCC.git vendor/opencc-src
+
+# 一次性：构建 universal OpenCC 静态库
 bash src/macos/scripts/build-opencc.sh
 
 # 构建 .app；版本号默认取最新 tag，可用 --version 覆盖

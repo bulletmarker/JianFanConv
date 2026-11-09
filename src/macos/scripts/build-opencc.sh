@@ -28,10 +28,17 @@ if [ ! -d "$SRC" ]; then
   echo "error: OpenCC source tree not found: $SRC" >&2
   echo "Set OPENCC_SRC to an OpenCC 1.4.2 checkout, or place it at:" >&2
   echo "  $ROOT/vendor/opencc-src" >&2
+  echo "Get the source once with:" >&2
+  echo "  git clone --branch ver.1.4.2 --depth 1 https://github.com/BYVoid/OpenCC.git \"$ROOT/vendor/opencc-src\"" >&2
   echo "(the source tree is gitignored; only maintainers rebuilding the" >&2
   echo " static library need it)." >&2
   exit 1
 fi
+
+command -v cmake >/dev/null 2>&1 || {
+  echo "error: cmake not found; install it first (for example: brew install cmake)." >&2
+  exit 1
+}
 
 BUILD_DIR="$ROOT/.build/opencc-macos"
 OUT_LIB="$ROOT/vendor/opencc/macos/libopencc.a"

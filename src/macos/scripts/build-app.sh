@@ -14,6 +14,11 @@ if [ "$(uname -s)" != "Darwin" ]; then
   exit 1
 fi
 
+command -v swiftc >/dev/null 2>&1 || {
+  echo "error: swiftc not found; install Xcode Command Line Tools (xcode-select --install)." >&2
+  exit 1
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 MACOS="$ROOT/src/macos"

@@ -7,6 +7,19 @@ It is a **build-time asset only**: `src/macos/scripts/build-app.sh` links it
 directly into the app executable, so the resulting `.app` contains no `.dylib`
 and needs no runtime extraction or cache directory.
 
+## Prerequisites
+
+- Xcode Command Line Tools: `xcode-select --install`
+- CMake: `brew install cmake` (or a CMake.app on `PATH`)
+- OpenCC 1.4.2 source checked out into `vendor/opencc-src/` (gitignored):
+
+  ```bash
+  git clone --branch ver.1.4.2 --depth 1 \
+    https://github.com/BYVoid/OpenCC.git vendor/opencc-src
+  ```
+
+  Or point `OPENCC_SRC` at an existing checkout when running the script.
+
 ## Reproduce
 
 1. Check out OpenCC at tag `ver.1.4.2` into `vendor/opencc-src/` (gitignored),
