@@ -74,7 +74,7 @@ struct PhraseToggle: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("地区用词")
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-        .accessibilityDisabled(!isEnabled)
+        .disabled(!isEnabled)
     }
 
     private var box: some View {
