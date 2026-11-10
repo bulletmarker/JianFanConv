@@ -18,10 +18,10 @@ macOS：引擎**静态链入主程序**，配置与词典放在 `.app/Contents/R
 | 角色 | 地址 | 备注 |
 |---|---|---|
 | Gitee（唯一真源） | `git@gitee.com:machangsheng/jian-fan-conv.git` | 本机 remote 名 `origin`；默认分支 `master`；只往这里推 |
-| GitHub（镜像） | `https://github.com/bulletmarker/JianFanConv` | public；Actions 每 15 分钟从 Gitee `--mirror`；应急直推用 `git@github.com:bulletmarker/JianFanConv.git` |
+| GitHub（镜像） | `https://github.com/bulletmarker/JianFanConv` | public；Actions 每 15 分钟从 Gitee `--mirror`；**只读镜像，本机不推送** |
 
-- 新克隆通常只有 `origin`（Gitee）；需要直推 GitHub 时先 `git remote add github git@github.com:bulletmarker/JianFanConv.git`。
-- 校验当前配置：`git remote -v`。
+- 所有提交只推 Gitee（`origin`）；**本机不添加 `github` remote，也不执行 `git push github`**——国内网络到 GitHub 不稳定，而且直推的内容会被下一次镜像覆盖。
+- 校验当前配置：`git remote -v`（正常只应有 `origin`）。
 - 发行版与附件**不随镜像同步**：Gitee 用 API / 网页，GitHub 用 `gh release create` / `gh release upload`（见「双平台发布」）。
 - 这两个都是公开仓库地址，不违反下面的 SENSITIVE DATA POLICY。
 
@@ -206,6 +206,7 @@ GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
 - 禁止删除 `opencc_convert_utf8_free` / `opencc_close`；禁止无锁调用转换。
 - 禁止为“顺手”引入 SDK、NuGet、网络请求、安装包或第二个源码文件。
 - 禁止假设 `dotnet build` 可用。
+- 禁止本地直推 GitHub，也禁止在 GitHub 侧提交或开分支：不添加 `github` remote、不执行 `git push github`；代码只允许 Gitee → GitHub 单向镜像，否则会被下一次 `--mirror` 覆盖。
 - 禁止在 Windows 上声称 macOS 产物「已构建 / 已验证」，或在 Mac 上声称 Windows 产物「已构建 / 已验证」（见 PLATFORM-SCOPED 规则）。
 - 禁止把 `opencc.dll` 打进 macOS 包，禁止在 mac 端改回 dylib 多文件分发；OpenCC 必须是静态链入。
 - 禁止在 `src/macos/scripts/*.sh` 中写死 Homebrew 路径、本机绝对路径或中文。
@@ -265,7 +266,7 @@ powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.2
 - 发布 zip = `JianFanConverter.exe` + `LICENSE.txt` + `THIRD-PARTY-NOTICES.txt`；`dist/` 仍只有 exe。
 - 手动兜底流程：`build.ps1` → `Compress-Archive -Path dist\*`（注意 `dist\*`，不要用 `dist`，否则解压多一层目录）→ `git tag -a` → `git push origin master --tags` → Gitee 网页建 release 上传 zip。
 - `git push origin` 只推 Gitee（唯一真源）。GitHub 通常十几分钟内自动同步；想立刻同步用 `gh workflow run sync-from-gitee.yml`。
-- 需要应急直推 GitHub 时先确认有 `github` remote（新克隆通常没有，地址见「REMOTES」），再 `git push github master --tags`。
+- 不要在本地直推 GitHub：国内网络不可靠，而且 GitHub 侧内容会被下一次 `--mirror` 覆盖。需要立即同步只触发拉取：`gh workflow run sync-from-gitee.yml --repo bulletmarker/JianFanConv`。
 - GitHub 的 release 由脚本调 `gh release create` 创建。`--mirror` 只同步 git 引用，**附件不会跨平台**。
 - 发行版说明里写清 SHA256、环境要求（Win10/11 x64、.NET Framework 4.8）、SmartScreen 提示与许可声明。
 - zip 与说明文件都是发布临时物（已在 `.gitignore`），上传后删除。
