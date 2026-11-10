@@ -167,8 +167,9 @@ codesign --verify --strict "$APP"
 # --- verify bundle ---------------------------------------------------------
 echo "==> verifying bundle"
 
-MACHO_LINES="$(find "$APP/Contents/MacOS" -type f -exec file {} \;)"
-MACHO_COUNT="$(printf '%s\n' "$MACHO_LINES" | grep -c 'Mach-O' || true)"
+# Count Mach-O files, not Mach-O lines: `file` prints one extra indented line
+# per architecture for a universal binary, so anchor the match at line start.
+MACHO_COUNT="$(find "$APP/Contents/MacOS" -type f -exec file -b {} \; | grep -c '^Mach-O' || true)"
 if [ "$MACHO_COUNT" -ne 1 ]; then
   echo "error: expected exactly one Mach-O under Contents/MacOS, found $MACHO_COUNT" >&2
   exit 1
