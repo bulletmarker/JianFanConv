@@ -69,7 +69,7 @@ bash src/macos/scripts/build-app.sh      # build dist-macos/JianFanConverter.app
 bash src/macos/scripts/test-engine.sh    # engine-level conversion vectors
 ```
 
-Requires macOS 14+. The app is ad-hoc signed and not notarized; on first launch use right-click → Open, or run `xattr -dr com.apple.quarantine JianFanConverter.app`.
+Requires macOS 14+. The app is ad-hoc signed and not notarized, so Gatekeeper refuses the first launch by design (the "Apple cannot verify ..." dialog); the download is not corrupt. Right-click → Open no longer works on macOS 15+, so either run `xattr -dr com.apple.quarantine /Applications/JianFanConverter.app`, or open System Settings → Privacy & Security and choose "Open Anyway". See the [Chinese README](README.md#首次打开被-gatekeeper-拦截) for the step-by-step version.
 
 ## License
 

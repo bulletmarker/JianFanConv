@@ -80,7 +80,39 @@ bash src/macos/scripts/build-app.sh --version 1.2.0
 
 产物：`dist-macos/JianFanConverter.app` 与 `dist-macos/JianFanConverter-v<版本>-macos-universal.zip`。
 
-要求 macOS 14+。应用为 ad-hoc 签名、未公证：首次打开需在 Finder 里右键 → 打开，或执行 `xattr -dr com.apple.quarantine JianFanConverter.app`。
+要求 macOS 14+。产物是 `.app`，直接拖进「应用程序」即可，没有安装器。
+
+### 首次打开被 Gatekeeper 拦截？
+
+应用是 **ad-hoc 签名、未做 Apple 公证**（公证需要付费的 Developer ID 证书），所以 macOS 会按设计拒绝启动，弹窗提示「Apple 无法验证 "JianFanConverter.app" 是否包含可能危害 Mac 安全或泄漏隐私的恶意软件」。**这不是文件损坏，也不是下载不完整**——这是未公证应用的预期行为，解压后 `codesign --verify --strict` 能通过。
+
+> macOS 15 起 Apple 已取消「右键 → 打开」这条绕过路径，网上多数旧教程在 Sequoia 及之后不再有效。
+
+任选一种放行：
+
+**方式一：命令行（最快）**
+
+```bash
+xattr -dr com.apple.quarantine /Applications/JianFanConverter.app
+open /Applications/JianFanConverter.app
+```
+
+`xattr -dr com.apple.quarantine` 只删除「来自网络下载」的隔离标记，不改动应用内容。
+
+**方式二：系统设置**
+
+1. 双击应用，看到拦截弹窗时点「完成」（**不要**点「移到废纸篓」）
+2. 打开「系统设置 → 隐私与安全性」，滚到底部
+3. 在「已阻止使用 "JianFanConverter.app"」旁点「仍要打开」，输入登录密码
+4. 再在弹窗里点「打开」
+
+如果已经点了「移到废纸篓」，先在废纸篓里右键 → 「放回原处」，再按上面操作。
+
+**方式三：自己构建**
+
+按上面的「构建」一节自行编译，产物可以直接运行，不需要处理隔离标记。
+
+放行后 `spctl -a` 仍会显示 `rejected`，因为它只认 Apple 签发的 Developer ID 签名；这不影响运行。
 
 引擎级自检（不启动 GUI）：
 
