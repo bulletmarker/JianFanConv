@@ -13,6 +13,18 @@ macOS：引擎**静态链入主程序**，配置与词典放在 `.app/Contents/R
 
 本仓库以 **Gitee 为唯一真源**：`origin` 只推 Gitee；GitHub 由 `.github/workflows/sync-from-gitee.yml` 定时从 Gitee 镜像（国内网络直推 GitHub 不稳定，故本地不再推 GitHub）。远程地址以 `git remote -v` 为准。
 
+## REMOTES
+
+| 角色 | 地址 | 备注 |
+|---|---|---|
+| Gitee（唯一真源） | `git@gitee.com:machangsheng/jian-fan-conv.git` | 本机 remote 名 `origin`；默认分支 `master`；只往这里推 |
+| GitHub（镜像） | `https://github.com/bulletmarker/JianFanConv` | public；Actions 每 15 分钟从 Gitee `--mirror`；应急直推用 `git@github.com:bulletmarker/JianFanConv.git` |
+
+- 新克隆通常只有 `origin`（Gitee）；需要直推 GitHub 时先 `git remote add github git@github.com:bulletmarker/JianFanConv.git`。
+- 校验当前配置：`git remote -v`。
+- 发行版与附件**不随镜像同步**：Gitee 用 API / 网页，GitHub 用 `gh release create` / `gh release upload`（见「双平台发布」）。
+- 这两个都是公开仓库地址，不违反下面的 SENSITIVE DATA POLICY。
+
 ## SENSITIVE DATA POLICY
 
 本文件会提交到公开仓库，编辑时必须遵守：
@@ -231,7 +243,8 @@ GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
 - macOS 端不需要运行时释放 / 缓存：OpenCC 配置与词典直接放在 `.app/Contents/Resources/opencc/`；开发期间可用 `JIANFAN_OPENCC_DIR` 覆盖目录。
 - `vendor/opencc/macos/libopencc.a` 是 universal 静态库（arm64 + x86_64），已并入 marisa；`.app` 内不应出现任何 `.dylib`。
 - Apple Silicon 拒绝运行未签名二进制：本地自用也必须 ad-hoc 签名（`codesign --sign -`）。
-- 未公证的 zip 下载后带 `com.apple.quarantine`：首次需右键 → 打开，或执行 `xattr -dr com.apple.quarantine JianFanConverter.app`。
+- 未公证的 zip 下载后带 `com.apple.quarantine`，Gatekeeper 会拦下首次启动（提示「Apple 无法验证…」）。**macOS 15 起「右键 → 打开」已失效**：要么 `xattr -dr com.apple.quarantine JianFanConverter.app`，要么在「系统设置 → 隐私与安全性」里点「仍要打开」。放行后 `spctl -a` 仍显示 rejected，属正常。
+- macOS 26+ 的 SDK 把 SwiftUI 的 `@State` 改成了宏，实现 `libSwiftUIMacros.dylib` **只随完整 Xcode 分发**；只有 Command Line Tools 时 `build-app.sh` 报 `external macro implementation type 'SwiftUIMacros.StateMacro' could not be found`。正解是装完整 Xcode 并 `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`；不想装 Xcode 时，可复制一份 SDK、删掉 `SwiftUICore.swiftmodule/*.swiftinterface` 里 3 处 `public macro State` 声明，构建时用 `SDKROOT=<该副本> bash src/macos/scripts/build-app.sh`（仅本机变通，副本与补丁脚本不入库；SDK 升级后要重做）。
 - macOS 输入框默认开启智能引号 / 自动替换，会篡改中文测试输入；`CodeEditor` 必须显式关闭，并在输入法 marked text 期间不回写绑定。
 - macOS 最低 14.0；`swiftc` 目标固定为 `arm64-apple-macos14.0` / `x86_64-apple-macos14.0`。
 - 默认分支 `master`；远程配置以 `git remote -v` 为准。
@@ -245,13 +258,14 @@ powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.2
 ```
 
 - `release.ps1` 的 `GITEE_TOKEN`（Gitee 私人令牌，需 `projects` 权限）从环境变量读取，顺序为进程 → User → Machine；**不要写进任何文件或提交**。
+- 令牌只有存放位置、不记值：Windows 放 User 级环境变量；macOS 放登录钥匙串，服务名 `GITEE_TOKEN`，读取用 `security find-generic-password -a "$USER" -s GITEE_TOKEN -w`（写入用 `security add-generic-password -a "$USER" -s GITEE_TOKEN -w "$(pbpaste)" -U`，可避免进 shell 历史）。GitHub 侧用 `gh auth login`，凭据存 keyring。
 - 只重跑某一环时用开关：`-SkipBuild` / `-SkipZip` / `-SkipGitPush` / `-SkipGitee` / `-SkipGitHub`。脚本对已存在的 tag、发行版、同名附件都是幂等的，可以安全重跑。
 - 脚本是 **ASCII-only**（同 `build.ps1` 的理由）；发行版标题从说明文件的标题行派生，不要在脚本里写中文字面量。
 - 脚本会把 `-Version` 传给 `build.ps1` 并校验 exe 的 `FileVersion`，避免 tag 与二进制版本号不一致。
 - 发布 zip = `JianFanConverter.exe` + `LICENSE.txt` + `THIRD-PARTY-NOTICES.txt`；`dist/` 仍只有 exe。
 - 手动兜底流程：`build.ps1` → `Compress-Archive -Path dist\*`（注意 `dist\*`，不要用 `dist`，否则解压多一层目录）→ `git tag -a` → `git push origin master --tags` → Gitee 网页建 release 上传 zip。
 - `git push origin` 只推 Gitee（唯一真源）。GitHub 通常十几分钟内自动同步；想立刻同步用 `gh workflow run sync-from-gitee.yml`。
-- 需要应急直推 GitHub 时用 `git push github master --tags`（`github` remote 仍保留）。
+- 需要应急直推 GitHub 时先确认有 `github` remote（新克隆通常没有，地址见「REMOTES」），再 `git push github master --tags`。
 - GitHub 的 release 由脚本调 `gh release create` 创建。`--mirror` 只同步 git 引用，**附件不会跨平台**。
 - 发行版说明里写清 SHA256、环境要求（Win10/11 x64、.NET Framework 4.8）、SmartScreen 提示与许可声明。
 - zip 与说明文件都是发布临时物（已在 `.gitignore`），上传后删除。
