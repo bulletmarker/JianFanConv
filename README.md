@@ -152,8 +152,6 @@ powershell -ExecutionPolicy Bypass -File tools\smoke.ps1
 - **窗口默认大小**：`MainForm` 构造函数里的 `ClientSize`
 - 改完运行 `build.ps1` 重新编译即可。
 
-维护者 / AI agent 的开发约定见 [AGENTS.md](AGENTS.md)。
-
 ## 文件结构
 
 ```

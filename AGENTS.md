@@ -1,5 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
+面向维护者与 AI agent，不是用户文档；用户请读 `README.md`。
+
 **Generated:** 2026-10-28
 **Branch:** master
 
