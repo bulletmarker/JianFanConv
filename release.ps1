@@ -300,6 +300,9 @@ if ($SkipGitHub) {
 
         if ($hasRelease) {
             Write-Host ('github release already exists: ' + $tag)
+            & gh release upload $tag $zipPath --repo $slug --clobber
+            if ($LASTEXITCODE -ne 0) { Fail 'gh release upload failed' }
+            Write-Host ('github attachment uploaded: ' + $zipName)
         } else {
             & gh release create $tag $zipPath --repo $slug --title $title --notes-file $notesPath
             if ($LASTEXITCODE -ne 0) { Fail 'gh release create failed' }
