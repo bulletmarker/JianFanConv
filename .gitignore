@@ -18,6 +18,7 @@ release-notes-v*.md
 dist-macos/
 src/macos/build/
 src/macos/.build/
+src/macos/.build-engine-smoke/
 .build/
 *.app/
 vendor/opencc-src/
