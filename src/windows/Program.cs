@@ -685,6 +685,7 @@ namespace JianFanConverter
     internal sealed class FlatButton : Control
     {
         private bool _hover;
+        private bool _checked;
 
         public FlatButton()
         {
@@ -695,11 +696,33 @@ namespace JianFanConverter
             TabStop = true;
         }
 
+        public bool Checked
+        {
+            get { return _checked; }
+            set { if (_checked != value) { _checked = value; Invalidate(); } }
+        }
+
         public void SizeToText()
         {
             Size s = TextRenderer.MeasureText(Text, Font);
             Width = s.Width + 32;
             Height = 34;
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            if (keyData == Keys.Space || keyData == Keys.Enter) return true;
+            return base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter)
+            {
+                OnClick(EventArgs.Empty);
+                e.Handled = true;
+            }
+            base.OnKeyDown(e);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -708,10 +731,10 @@ namespace JianFanConverter
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (GraphicsPath path = Theme.RoundPath(r, 8))
             {
-                using (SolidBrush b = new SolidBrush(_hover ? Theme.Hover : Theme.Background))
+                using (SolidBrush b = new SolidBrush(_checked ? Theme.Accent : (_hover ? Theme.Hover : Theme.Background)))
                     e.Graphics.FillPath(b, path);
             }
-            TextRenderer.DrawText(e.Graphics, Text, Font, r, Theme.TextBody,
+            TextRenderer.DrawText(e.Graphics, Text, Font, r, _checked ? Theme.White : Theme.TextBody,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
         }
 
@@ -962,6 +985,7 @@ namespace JianFanConverter
         private SegmentedControl _regionSeg;
         private FlatCheckBox _chkPhrases;
         private FlatButton _btnClear;
+        private FlatButton _btnPin;
         private LinkButton _btnPaste;
         private LinkButton _btnCopy;
 
@@ -1011,7 +1035,12 @@ namespace JianFanConverter
             _btnClear.SizeToText();
             _btnClear.Click += delegate { ClearAll(); };
 
+            _btnPin = new FlatButton { Text = "置顶", TabIndex = 8, AccessibleName = "置顶" };
+            _btnPin.SizeToText();
+            _btnPin.Click += OnPinToggled;
+
             _header.Controls.Add(_btnClear);
+            _header.Controls.Add(_btnPin);
             _header.Controls.Add(_lblSubtitle);
             _header.Controls.Add(_lblTitle);
 
@@ -1157,6 +1186,7 @@ namespace JianFanConverter
             };
 
             Shown += OnShown;
+            _header.Resize += delegate { LayoutHeader(); };
         }
 
         private Panel BuildCardHeader(string title, out Label titleLabel, out Label counter, out LinkButton action)
@@ -1208,8 +1238,7 @@ namespace JianFanConverter
             _regionSeg.Top = (_toolbar.Height - _regionSeg.Height) / 2;
             _chkPhrases.Left = _regionSeg.Right + 24;
             _chkPhrases.Top = (_toolbar.Height - _chkPhrases.Height) / 2;
-            _btnClear.Left = _header.Width - 20 - _btnClear.Width;
-            _btnClear.Top = (_header.Height - _btnClear.Height) / 2;
+            LayoutHeader();
             LayoutCardHeader(_headLeft, _lblInputTitle, _lblInputCount, _btnPaste);
             LayoutCardHeader(_headRight, _lblOutputTitle, _lblOutputCount, _btnCopy);
             _lblEngine.Left = _status.Width - 20 - _lblEngine.Width;
@@ -1251,9 +1280,25 @@ namespace JianFanConverter
             Reconvert();
         }
 
+        private void OnPinToggled(object sender, EventArgs e)
+        {
+            _btnPin.Checked = !_btnPin.Checked;
+            TopMost = _btnPin.Checked;
+        }
+
         private void UpdatePhrasesEnabled()
         {
             _chkPhrases.Enabled = _variant != ChineseVariant.Standard;
+        }
+
+        private void LayoutHeader()
+        {
+            if (_btnClear == null || _btnPin == null) return;
+            int right = _header.Width - 20;
+            _btnClear.Left = right - _btnClear.Width;
+            _btnClear.Top = (_header.Height - _btnClear.Height) / 2;
+            _btnPin.Left = _btnClear.Left - 8 - _btnPin.Width;
+            _btnPin.Top = (_header.Height - _btnPin.Height) / 2;
         }
 
         private void Reconvert()

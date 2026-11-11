@@ -13,11 +13,13 @@ struct MainView: View {
     @State private var status = "就绪"
     @State private var generation = 0
     @State private var debounceTask: Task<Void, Never>?
+    @State private var pinned = false
+    @State private var window: NSWindow?
     @FocusState private var inputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            HeaderBar(onClear: clearAll)
+            HeaderBar(isPinned: pinned, onTogglePin: togglePin, onClear: clearAll)
             ToolbarView(s2t: $s2t, variant: $variant, localPhrases: $localPhrases)
 
             HStack(spacing: 12) {
@@ -48,6 +50,9 @@ struct MainView: View {
             StatusBar(status: status)
         }
         .background(Theme.background)
+        .background(WindowAccessor { newWindow in
+            if window !== newWindow { window = newWindow }
+        })
         .onAppear {
             EngineBootstrap.perform()
             DispatchQueue.main.async { inputFocused = true }
@@ -145,6 +150,12 @@ struct MainView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(outputText, forType: .string)
         status = "已复制到剪贴板"
+    }
+
+    private func togglePin() {
+        let next = !pinned
+        pinned = next
+        window?.level = next ? .floating : .normal
     }
 
     private func clearAll() {

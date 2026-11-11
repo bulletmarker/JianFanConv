@@ -33,6 +33,7 @@ This is a Simplified ↔ Traditional Chinese conversion tool, so the interface i
 - Target variant: `标准` (OpenCC standard), `台湾` (Taiwan) or `香港` (Hong Kong), plus an optional 地区用词 toggle for local wording (Taiwan: 软件 → 軟體; Hong Kong: 打印机 → 打印機)
 - Live conversion while typing (200 ms debounce); the result pane is editable and partially copyable
 - Paste into the source pane, copy the result, clear both with one click
+- `置顶` keeps the window above all other windows; click again to release it (session-only, nothing is saved)
 - Live character count and conversion time in the status bar
 - The vertical scrollbar appears only when the text actually overflows
 - Switching direction keeps the source text and re-converts immediately

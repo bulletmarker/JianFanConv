@@ -91,6 +91,7 @@ JianFanConv/
 | 改方案映射 | `OpenCCEngine.ResolveConfig` | 方向 × 地区 × 用词 → 配置文件名（唯一判断处） |
 | 改实时转换 | `StartConversion` | 200 ms 防抖 + 后台线程 + 版本号 |
 | 改滚动条 | `AutoScrollTextBox` | 不满一屏隐藏，超出显示 |
+| 改窗口置顶 | `MainForm.OnPinToggled` / `MainView.togglePin` | Windows 用 `Form.TopMost`；macOS 用 `NSWindow.level = .floating` / `.normal` |
 | 改构建 / 打包 | `build.ps1` | 只从 `vendor/` 取素材并以 `/resource` 内嵌 |
 | 升级 OpenCC | `vendor/opencc/` | 必须同步 LICENSE / NOTICE.txt，并 bump `RuntimeTag` |
 | 发版 | 本文「发布流程」 | 构建 → 压缩 → 打 tag → 推 Gitee（GitHub 自动镜像） |
@@ -165,16 +166,17 @@ bash src/macos/scripts/test-engine.sh
 GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
 ```
 
-`dist/` 与 `dist-macos/` 不入库，新克隆的仓库必须先在对应宿主上构建。Windows 侧无单元测试框架、无 CI，`tools/smoke.ps1` 覆盖下面的 1–5 项；macOS 侧有引擎级 `test-engine.sh` 与打包级 `smoke.sh`，GUI 仍需手工验收。改完必须做的最小自检：
+`dist/` 与 `dist-macos/` 不入库，新克隆的仓库必须先在对应宿主上构建。Windows 侧无单元测试框架、无 CI，`tools/smoke.ps1` 覆盖下面的 1–6 项；macOS 侧有引擎级 `test-engine.sh` 与打包级 `smoke.sh`，GUI 仍需手工验收。改完必须做的最小自检：
 
 1. 默认（台湾 + 地区用词）：`汉字转换测试，软件和硬件。` → `漢字轉換測試，軟體和硬體。`
 2. 切「标准」：同一输入 → `漢字轉換測試，軟件和硬件。`
 3. 切「香港」（地区用词开）：`软件和硬盘，鼠标，打印机。` → `軟件和硬碟，滑鼠，打印機。`
 4. 繁→简（台湾 + 地区用词）：`漢字轉換測試，軟體和硬體。` → `汉字转换测试，软件和硬件。`
 5. `复制` 后剪贴板 = 右栏内容；`清空` 后两栏为空。
-6. 单文件分发：把 `dist\JianFanConverter.exe` **单独**拷到空目录运行，确认能转换（不是只在仓库里能跑）。
+6. 点「置顶」应把窗口浮在其它窗口之上，再点一次取消；`tools\smoke.ps1` 用键盘切换并校验 `WS_EX_TOPMOST`
+7. 单文件分发：把 `dist\JianFanConverter.exe` **单独**拷到空目录运行，确认能转换（不是只在仓库里能跑）。
 
-前 5 项可一键跑 `tools/smoke.ps1`；第 6 项仍需手工验证。
+前 6 项可一键跑 `tools/smoke.ps1`；第 7 项仍需手工验证。
 
 ## CONVENTIONS (deviations only)
 
@@ -250,6 +252,9 @@ GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
 - macOS 26+ 的 SDK 把 SwiftUI 的 `@State` 改成了宏，实现 `libSwiftUIMacros.dylib` **只随完整 Xcode 分发**；只有 Command Line Tools 时 `build-app.sh` 报 `external macro implementation type 'SwiftUIMacros.StateMacro' could not be found`。正解是装完整 Xcode 并 `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`；不想装 Xcode 时，可复制一份 SDK、删掉 `SwiftUICore.swiftmodule/*.swiftinterface` 里 3 处 `public macro State` 声明，构建时用 `SDKROOT=<该副本> bash src/macos/scripts/build-app.sh`（仅本机变通，副本与补丁脚本不入库；SDK 升级后要重做）。
 - macOS 输入框默认开启智能引号 / 自动替换，会篡改中文测试输入；`CodeEditor` 必须显式关闭，并在输入法 marked text 期间不回写绑定。
 - macOS 最低 14.0；`swiftc` 目标固定为 `arm64-apple-macos14.0` / `x86_64-apple-macos14.0`。
+- `置顶` 是会话态：Windows 走 `Form.TopMost`，macOS 走 `NSWindow.level`（`.floating` / `.normal`），两端都不落盘；`WindowGroup` 关窗重开回到 `.normal` 属预期，不要为此加 `UserDefaults` 或配置文件。
+- macOS 14 没有设置窗口层级的 scene modifier（`.windowLevel` 是 macOS 15+），只能用一个 `NSViewRepresentable`（`WindowAccessor`）取宿主 `NSWindow`；窗口实例只能在 `viewDidMoveToWindow` 回写，**不要**在 `updateNSView` 里写 `@State`，那会在每次视图更新时重新发布状态、形成无限更新循环。
+- Windows 的 `FlatButton` 现在有 `Checked`（主色填充 + 白字）和 Space/Enter 激活；header 右侧按钮统一由 `LayoutHeader()` 在 `OnShown` 与 `_header.Resize` 里重排，不要再把坐标单独写进 `OnShown`（否则拉伸窗口后按钮不跟随）。
 - 默认分支 `master`；远程配置以 `git remote -v` 为准。
 
 ## 发布流程

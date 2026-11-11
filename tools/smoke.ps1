@@ -1,8 +1,9 @@
 # JianFanConverter UI smoke test (PowerShell 5.1, ASCII only).
 #
 # Builds the app (unless -SkipBuild), cold-starts it, drives the real WinForms
-# controls through WM_SETTEXT / WM_KEYDOWN, and asserts every conversion mode.
-# Copy/clear use a real foreground click, which briefly moves the mouse.
+# controls through WM_SETTEXT / WM_KEYDOWN, and asserts every conversion mode
+# plus the always-on-top pin toggle. Copy/clear use a real foreground click,
+# which briefly moves the mouse.
 #
 # All Chinese literals are built from code points so this file stays ASCII:
 # PowerShell 5.1 misparses UTF-8 .ps1 files that have no BOM.
@@ -34,6 +35,7 @@ $REGION     = Chars @(0x7E41, 0x4F53, 0x5730, 0x533A)
 $PHRASES    = Chars @(0x5730, 0x533A, 0x7528, 0x8BCD)
 $COPY       = Chars @(0x590D, 0x5236)
 $CLEAR      = Chars @(0x6E05, 0x7A7A)
+$PIN        = Chars @(0x7F6E, 0x9876)
 
 $S1 = Chars @(0x6C49, 0x5B57, 0x8F6C, 0x6362, 0x6D4B, 0x8BD5, 0xFF0C,
               0x8F6F, 0x4EF6, 0x548C, 0x786C, 0x4EF6, 0x3002)
@@ -73,6 +75,7 @@ public static class Smoke {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] public static extern int GetWindowLongW(IntPtr h, int index);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, IntPtr extra);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L; public int T; public int R; public int B; }
     [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
@@ -129,6 +132,13 @@ function Find-Control($items, [string]$text) {
     $hit = @($items | Where-Object { $_.Text -eq $text } | Select-Object -First 1)
     if ($hit.Count -eq 0) { return [IntPtr]::Zero }
     return $hit[0].H
+}
+
+# WS_EX_TOPMOST is what Form.TopMost flips; reading the ex-style is the only
+# way to observe it from outside the process.
+function Test-TopMost([IntPtr]$h) {
+    $ex = [Smoke]::GetWindowLongW($h, -20)
+    return (($ex -band 0x8) -ne 0)
 }
 
 function Wait-Text([IntPtr]$h, [string]$expected, [int]$timeoutMs = 8000) {
@@ -230,13 +240,16 @@ try {
     $chkH = Find-Control $items $PHRASES
     $copyH = Find-Control $items $COPY
     $clearH = Find-Control $items $CLEAR
+    $pinH = Find-Control $items $PIN
     Check 'direction control' ($dirH -ne [IntPtr]::Zero) 'not found'
     Check 'region control' ($regionH -ne [IntPtr]::Zero) 'not found'
     Check 'phrases checkbox' ($chkH -ne [IntPtr]::Zero) 'not found'
     Check 'copy button' ($copyH -ne [IntPtr]::Zero) 'not found'
     Check 'clear button' ($clearH -ne [IntPtr]::Zero) 'not found'
+    Check 'pin button' ($pinH -ne [IntPtr]::Zero) 'not found'
     if ($dirH -eq [IntPtr]::Zero -or $regionH -eq [IntPtr]::Zero -or
-        $chkH -eq [IntPtr]::Zero -or $copyH -eq [IntPtr]::Zero -or $clearH -eq [IntPtr]::Zero) {
+        $chkH -eq [IntPtr]::Zero -or $copyH -eq [IntPtr]::Zero -or $clearH -eq [IntPtr]::Zero -or
+        $pinH -eq [IntPtr]::Zero) {
         throw 'required controls are missing'
     }
 
@@ -274,6 +287,16 @@ try {
     Set-Input $S3
     Send-Key $dirH 0x27
     Check 'Taiwan phrases to simplified' (Wait-Text $outputBox $E_REVERSE) ('got=' + (Get-Text $outputBox))
+
+    # Pin toggle: keyboard driven, so it runs without a real desktop too.
+    # FlatButton handles Space itself (no synthetic mouse click can hit it).
+    Check 'window starts unpinned' (-not (Test-TopMost $main)) 'WS_EX_TOPMOST set at startup'
+    Send-Key $pinH 0x20
+    Start-Sleep -Milliseconds 300
+    Check 'pin button keeps the window on top' (Test-TopMost $main) 'WS_EX_TOPMOST missing'
+    Send-Key $pinH 0x20
+    Start-Sleep -Milliseconds 300
+    Check 'pin button releases the window' (-not (Test-TopMost $main)) 'WS_EX_TOPMOST still set'
 
     if (-not $SkipInteractive) {
         $fgOk = Force-Foreground $main
