@@ -265,6 +265,7 @@ GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
 powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.2
 ```
 
+- 版本号规则：修 bug、加小功能这类改动只在 `1.2.x` 上递增 patch（当前最新 `v1.2.1`，下一个是 `v1.2.2`），**不要升到 `1.3`**；只有在项目所有者明确要求、或改动大到需要重置预期时才升次版本号。
 - `release.ps1` 的 `GITEE_TOKEN`（Gitee 私人令牌，需 `projects` 权限）从环境变量读取，顺序为进程 → User → Machine；**不要写进任何文件或提交**。
 - 令牌只有存放位置、不记值：Windows 放 User 级环境变量；macOS 放登录钥匙串，服务名 `GITEE_TOKEN`，读取用 `security find-generic-password -a "$USER" -s GITEE_TOKEN -w`（写入用 `security add-generic-password -a "$USER" -s GITEE_TOKEN -w "$(pbpaste)" -U`，可避免进 shell 历史）。GitHub 侧用 `gh auth login`，凭据存 keyring。
 - 只重跑某一环时用开关：`-SkipBuild` / `-SkipZip` / `-SkipGitPush` / `-SkipGitee` / `-SkipGitHub`。脚本对已存在的 tag、发行版、同名附件都是幂等的，可以安全重跑。
