@@ -91,7 +91,7 @@ JianFanConv/
 | 改方案映射 | `OpenCCEngine.ResolveConfig` | 方向 × 地区 × 用词 → 配置文件名（唯一判断处） |
 | 改实时转换 | `StartConversion` | 200 ms 防抖 + 后台线程 + 版本号 |
 | 改滚动条 | `AutoScrollTextBox` | 不满一屏隐藏，超出显示 |
-| 改窗口置顶 | `MainForm.OnPinToggled` / `MainView.togglePin` | Windows 用 `Form.TopMost`；macOS 用 `NSWindow.level = .floating` / `.normal` |
+| 改窗口置顶 | `MainForm.OnPinToggled` / `MainView.togglePin` / `MainView.applyPinLevel` | Windows 用 `Form.TopMost`；macOS 用 `NSWindow.level = .floating` / `.normal`，全屏期间交回 `.normal` |
 | 改构建 / 打包 | `build.ps1` | 只从 `vendor/` 取素材并以 `/resource` 内嵌 |
 | 升级 OpenCC | `vendor/opencc/` | 必须同步 LICENSE / NOTICE.txt，并 bump `RuntimeTag` |
 | 发版 | 本文「发布流程」 | 构建 → 压缩 → 打 tag → 推 Gitee（GitHub 自动镜像） |
@@ -254,6 +254,7 @@ GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version 1.2.0
 - macOS 最低 14.0；`swiftc` 目标固定为 `arm64-apple-macos14.0` / `x86_64-apple-macos14.0`。
 - `置顶` 是会话态：Windows 走 `Form.TopMost`，macOS 走 `NSWindow.level`（`.floating` / `.normal`），两端都不落盘；`WindowGroup` 关窗重开回到 `.normal` 属预期，不要为此加 `UserDefaults` 或配置文件。
 - macOS 14 没有设置窗口层级的 scene modifier（`.windowLevel` 是 macOS 15+），只能用一个 `NSViewRepresentable`（`WindowAccessor`）取宿主 `NSWindow`；窗口实例只能在 `viewDidMoveToWindow` 回写，**不要**在 `updateNSView` 里写 `@State`，那会在每次视图更新时重新发布状态、形成无限更新循环。
+- macOS 置顶窗口必须先把层级交回 `.normal` 再进原生全屏：`level = .floating` 时 `enterFullScreen` 会成功，但之后「退出全屏」静默失效（窗口卡在全屏、菜单项按了没反应、`AXWindows` 变空，只能强退应用）。`MainView` 因此在 `willEnterFullScreen` 里降 `.normal`、`didExitFullScreen` 里按 `pinned` 恢复；`togglePin` 只改状态、统一走 `applyPinLevel`，不要直接写 `window.level`。
 - Windows 的 `FlatButton` 现在有 `Checked`（主色填充 + 白字）和 Space/Enter 激活；header 右侧按钮统一由 `LayoutHeader()` 在 `OnShown` 与 `_header.Resize` 里重排，不要再把坐标单独写进 `OnShown`（否则拉伸窗口后按钮不跟随）。
 - 默认分支 `master`；远程配置以 `git remote -v` 为准。
 
