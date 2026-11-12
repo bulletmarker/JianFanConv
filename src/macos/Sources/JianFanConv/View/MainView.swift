@@ -51,8 +51,22 @@ struct MainView: View {
         }
         .background(Theme.background)
         .background(WindowAccessor { newWindow in
-            if window !== newWindow { window = newWindow }
+            if window !== newWindow {
+                window = newWindow
+                applyPinLevel()
+            }
         })
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { note in
+            // A .floating window wedges the fullscreen transition: the window
+            // enters fullscreen but "Exit Full Screen" then does nothing.
+            // Hand the level back to AppKit while fullscreen is in charge.
+            guard (note.object as? NSWindow) === window else { return }
+            window?.level = .normal
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { note in
+            guard (note.object as? NSWindow) === window else { return }
+            applyPinLevel()
+        }
         .onAppear {
             EngineBootstrap.perform()
             DispatchQueue.main.async { inputFocused = true }
@@ -153,9 +167,15 @@ struct MainView: View {
     }
 
     private func togglePin() {
-        let next = !pinned
-        pinned = next
-        window?.level = next ? .floating : .normal
+        pinned = !pinned
+        applyPinLevel()
+    }
+
+    // Only the windowed state owns the level; native fullscreen does.
+    private func applyPinLevel() {
+        guard let window else { return }
+        let floating = pinned && !window.styleMask.contains(.fullScreen)
+        window.level = floating ? .floating : .normal
     }
 
     private func clearAll() {
