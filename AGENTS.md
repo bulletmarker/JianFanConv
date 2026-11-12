@@ -296,9 +296,21 @@ Windows 与 macOS 的产物只能在各自宿主上构建，所以发布拆成�
    构建 universal `.app` → 打 `JianFanConverter-v<版本>-macos-universal.zip` → 上传到**同一个** Gitee 发行版与 GitHub release。
 3. 检查两个平台的发行版都同时挂有 `-win-x64.zip` 与 `-macos-universal.zip`。mac zip 的 SHA256 由脚本打印，需要时补进发行版说明。
 
+#### 反向：先 Mac 后 Windows
+
+只适用于人不在 Windows 机器旁边（例如带 Mac 出门）。tag 与发行版改由 Mac 建，Windows 回来补包：
+
+1. Mac 打 tag 并推 Gitee：`git tag -a v<版本> -m "JianFanConverter v<版本>"` → `git push origin refs/tags/v<版本>`。
+2. Mac 用 Gitee API 建发行版（只接受 form 编码；`name` / `body` 用 `--data-urlencode` 传，中文靠落盘文件避免编码问题）：
+   `curl -sS -X POST --data-urlencode "access_token=$GITEE_TOKEN" --data-urlencode "tag_name=v<版本>" --data-urlencode "name=简繁转换 v<版本>" --data-urlencode "body@notes.md" --data-urlencode "target_commitish=$(git rev-parse HEAD)" --data-urlencode "prerelease=false" -o created.json https://gitee.com/api/v5/repos/<owner>/<repo>/releases`
+   zip 的 SHA256 只能等构建完才知道：先在说明里留占位符，出包后用 `PATCH /releases/<id>` 覆盖 `body`——**PATCH 必须同时带 `tag_name` 与 `name`**，只传 `body` 会回 `tag_name is missing`。
+3. Mac 传包：`GITEE_TOKEN=... bash src/macos/scripts/release-macos.sh --version <版本>`。本机没有 `github` remote，脚本的 GitHub 段会跳过，手动补：`gh workflow run sync-from-gitee.yml --repo <slug>` 等 run 成功后 `gh release create v<版本> <mac zip> --repo <slug> --title ... --notes-file ...`（等价于 `release.ps1` 里的那一环）。
+4. Windows 回来照常 `release.ps1 -Version <版本>`：tag 已存在 → 跳过；Gitee 发行版已存在 → 只补 `-win-x64.zip`；GitHub release 已存在 → 只 `gh release upload`。注意脚本启动时**仍强制要求** `release-notes-v<版本>.md`（该内容不会被应用），已存在发行版的说明也不会被覆盖，要改只能上网页改。
+5. 补包要趁早：`master` 若在 tag 之后又追加了提交，Windows 就是从「tag 之后」的 commit 构建，产物与 tag 不再一一对应（只改文档不影响 exe，但仍应避免）。
+
 约束：
 
-- 顺序固定为「先 Windows 后 Mac」：模型 B 依赖 Windows 先创建 tag / 发行版；`release-macos.sh` 找不到发行版会直接报错并提示。
+- 默认顺序是「先 Windows 后 Mac」：模型 B 依赖 Windows 先创建 tag / 发行版；`release-macos.sh` 找不到发行版会直接报错并提示。确实只能先发 Mac 时按上面「反向」走。
 - 两端必须构建同一 commit：`release-macos.sh` 校验 `HEAD == v<版本>` 且工作区干净，不满足就退出。
 - Mac 侧只需要 `GITEE_TOKEN`、`python3`（随 CLT）与 `gh`；不需要 `release-notes-v*.md`（该文件不入库，Mac 上没有）。
 - 上传是幂等的：附件已存在时跳过，可安全重跑；GitHub 附件用 `gh release upload --clobber`。
